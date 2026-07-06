@@ -6,27 +6,30 @@ import com.chaquo.python.PyObject
 import com.chaquo.python.Python
 import com.chaquo.python.android.AndroidPlatform
 import dagger.hilt.android.qualifiers.ApplicationContext
-import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Owns the embedded CPython interpreter (Chaquopy). Starting Python is a
- * one-time, process-wide operation; this wrapper makes it idempotent and
- * exposes the `yt_archiver` module.
+ * Owns the embedded CPython interpreter (Chaquopy). Starting Python loads native
+ * libraries and does disk I/O, so it must NEVER run on the main thread (that
+ * froze the UI on launch). [start] is @Synchronized and idempotent: call it from
+ * a background thread at boot; any later caller (analyze/download on IO) blocks
+ * here only until initialization is complete, never racing a half-started state.
  */
 @Singleton
 class PythonRuntime @Inject constructor(
     @ApplicationContext private val context: Context,
     private val storageLocator: StorageLocator,
 ) {
-    private val started = AtomicBoolean(false)
+    @Volatile private var started = false
 
+    @Synchronized
     fun start() {
-        if (!started.compareAndSet(false, true)) return
+        if (started) return
         if (!Python.isStarted()) {
             Python.start(AndroidPlatform(context))
         }
+        started = true
         // Let a self-updated yt-dlp (if any) shadow the bundled one.
         runCatching {
             archiverModule().callAttr("configure", storageLocator.engineDir().absolutePath)
@@ -34,7 +37,7 @@ class PythonRuntime @Inject constructor(
     }
 
     private fun python(): Python {
-        if (!started.get()) start()
+        if (!started) start()
         return Python.getInstance()
     }
 

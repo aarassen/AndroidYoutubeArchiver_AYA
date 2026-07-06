@@ -53,8 +53,12 @@ class YtArchiverApp : Application(), Configuration.Provider, ImageLoaderFactory 
         super.onCreate()
         if (BuildConfig.DEBUG) enableStrictModeLogging()
         NotificationChannels.createAll(this)
-        pythonRuntime.start()
-        maybeAutoUpdateEngine()
+        // Start Python OFF the main thread — Chaquopy loads native libs + reads
+        // from disk, which froze the UI on launch when done synchronously here.
+        appScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            pythonRuntime.start()
+            maybeAutoUpdateEngine()
+        }
     }
 
     /** Logs (does not crash) any accidental disk/network work on the main thread,
