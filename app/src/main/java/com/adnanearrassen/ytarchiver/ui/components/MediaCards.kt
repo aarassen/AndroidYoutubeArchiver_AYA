@@ -1,7 +1,6 @@
 package com.adnanearrassen.ytarchiver.ui.components
 
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -14,13 +13,22 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -32,12 +40,14 @@ import com.adnanearrassen.ytarchiver.core.common.Formatters
 import com.adnanearrassen.ytarchiver.domain.model.ArchivedMedia
 import java.io.File
 
-/** A large, YouTube-style video card for vertical lists. */
+/** A large, YouTube-style video card for vertical feeds. */
 @Composable
 fun VideoCard(
     media: ArchivedMedia,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    onToggleFavorite: (() -> Unit)? = null,
+    onDelete: (() -> Unit)? = null,
 ) {
     Column(
         modifier = modifier
@@ -53,7 +63,10 @@ fun VideoCard(
                 .fillMaxWidth()
                 .padding(horizontal = 12.dp),
         )
-        Row(modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
+        Row(
+            modifier = Modifier.padding(start = 12.dp, end = 4.dp, top = 10.dp),
+            verticalAlignment = Alignment.Top,
+        ) {
             Surface(
                 shape = CircleShape,
                 color = MaterialTheme.colorScheme.surfaceVariant,
@@ -86,19 +99,21 @@ fun VideoCard(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            if (media.isFavorite) {
+            if (onDelete != null || onToggleFavorite != null) {
+                MediaOverflowMenu(media.isFavorite, onToggleFavorite, onDelete)
+            } else if (media.isFavorite) {
                 Icon(
                     Icons.Filled.Favorite,
                     contentDescription = "Favorite",
                     tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(18.dp),
+                    modifier = Modifier.padding(8.dp).size(18.dp),
                 )
             }
         }
     }
 }
 
-/** A compact horizontal card for carousels (Recently added / Continue watching). */
+/** A compact horizontal card for carousels (Continue watching). */
 @Composable
 fun CompactVideoCard(
     media: ArchivedMedia,
@@ -107,7 +122,7 @@ fun CompactVideoCard(
 ) {
     Column(
         modifier = modifier
-            .width(220.dp)
+            .width(240.dp)
             .clickable(onClick = onClick),
     ) {
         Thumbnail(
@@ -140,12 +155,14 @@ fun MusicRow(
     media: ArchivedMedia,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    onToggleFavorite: (() -> Unit)? = null,
+    onDelete: (() -> Unit)? = null,
 ) {
     Row(
         modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+            .padding(start = 16.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Surface(
@@ -186,5 +203,46 @@ fun MusicRow(
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+        if (onDelete != null || onToggleFavorite != null) {
+            MediaOverflowMenu(media.isFavorite, onToggleFavorite, onDelete)
+        }
+    }
+}
+
+/** Three-dot menu with Favorite/Unfavorite and Delete actions. */
+@Composable
+fun MediaOverflowMenu(
+    isFavorite: Boolean,
+    onToggleFavorite: (() -> Unit)?,
+    onDelete: (() -> Unit)?,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        androidx.compose.material3.IconButton(onClick = { expanded = true }) {
+            Icon(Icons.Filled.MoreVert, contentDescription = "More options")
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            if (onToggleFavorite != null) {
+                DropdownMenuItem(
+                    text = { Text(if (isFavorite) "Remove favorite" else "Add to favorites") },
+                    leadingIcon = {
+                        Icon(
+                            if (isFavorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
+                            contentDescription = null,
+                        )
+                    },
+                    onClick = { expanded = false; onToggleFavorite() },
+                )
+            }
+            if (onDelete != null) {
+                DropdownMenuItem(
+                    text = { Text("Delete", color = MaterialTheme.colorScheme.error) },
+                    leadingIcon = {
+                        Icon(Icons.Filled.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+                    },
+                    onClick = { expanded = false; onDelete() },
+                )
+            }
+        }
     }
 }
