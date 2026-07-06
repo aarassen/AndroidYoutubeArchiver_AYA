@@ -1,8 +1,6 @@
 package com.adnanearrassen.ytarchiver.ui.components
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -60,7 +58,10 @@ private fun PlaylistCover(playlist: Playlist, modifier: Modifier = Modifier) {
     }
 }
 
-/** Compact playlist card for horizontal shelves (Home). */
+/**
+ * Full-width playlist card, sized exactly like a normal video card so playlists
+ * sit naturally in the same scrollable feed.
+ */
 @Composable
 fun PlaylistCard(
     playlist: Playlist,
@@ -71,75 +72,40 @@ fun PlaylistCard(
 ) {
     Column(
         modifier = modifier
-            .width(240.dp)
-            .clickable(onClick = onClick),
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(bottom = 8.dp),
     ) {
-        PlaylistCover(playlist)
-        Spacer(Modifier.height(6.dp))
-        Row(verticalAlignment = Alignment.Top) {
+        PlaylistCover(playlist, modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp))
+        Row(
+            modifier = Modifier.padding(start = 12.dp, end = 4.dp, top = 10.dp),
+            verticalAlignment = Alignment.Top,
+        ) {
             Column(Modifier.weight(1f)) {
                 Text(
                     text = playlist.name,
-                    style = MaterialTheme.typography.bodyLarge,
+                    style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    text = "Playlist · ${playlist.itemCount} videos",
+                    text = buildString {
+                        append("Playlist · ${playlist.itemCount} videos")
+                        if (playlist.totalDurationSeconds > 0) {
+                            append(" · ")
+                            append(Formatters.duration(playlist.totalDurationSeconds))
+                        }
+                    },
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
             if (onDelete != null || onToggleFavorite != null) {
                 MediaOverflowMenu(playlist.isFavorite, onToggleFavorite, onDelete)
             }
-        }
-    }
-}
-
-/** Full-width playlist row for vertical lists (Library). */
-@Composable
-fun PlaylistRow(
-    playlist: Playlist,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    onToggleFavorite: (() -> Unit)? = null,
-    onDelete: (() -> Unit)? = null,
-) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(start = 12.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        PlaylistCover(playlist, modifier = Modifier.width(150.dp))
-        Spacer(Modifier.width(12.dp))
-        Column(Modifier.weight(1f)) {
-            Text(
-                text = playlist.name,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                text = buildString {
-                    append("${playlist.itemCount} videos")
-                    if (playlist.totalDurationSeconds > 0) {
-                        append(" · ")
-                        append(Formatters.duration(playlist.totalDurationSeconds))
-                    }
-                },
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-            )
-        }
-        if (onDelete != null || onToggleFavorite != null) {
-            MediaOverflowMenu(playlist.isFavorite, onToggleFavorite, onDelete)
         }
     }
 }

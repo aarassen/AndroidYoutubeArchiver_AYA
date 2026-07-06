@@ -35,7 +35,7 @@ import com.adnanearrassen.ytarchiver.domain.model.Playlist
 import com.adnanearrassen.ytarchiver.ui.components.ConfirmDeleteDialog
 import com.adnanearrassen.ytarchiver.ui.components.EmptyState
 import com.adnanearrassen.ytarchiver.ui.components.MusicRow
-import com.adnanearrassen.ytarchiver.ui.components.PlaylistRow
+import com.adnanearrassen.ytarchiver.ui.components.PlaylistCard
 import com.adnanearrassen.ytarchiver.ui.components.VideoCard
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -86,16 +86,28 @@ fun LibraryScreen(
                 }
             }
 
-            if (filter == LibraryFilter.PLAYLISTS) {
-                if (playlists.isEmpty() && query.isBlank()) {
-                    item {
-                        Box(Modifier.fillMaxWidth().padding(top = 64.dp), contentAlignment = Alignment.Center) {
-                            EmptyState(title = "No playlists yet", subtitle = "Download a playlist to see it here.")
-                        }
+            // "All" and "Playlists" include playlist cards; everything else is
+            // media only. Playlists render first, then standalone media.
+            val searching = query.isNotBlank()
+            val showPlaylists = !searching &&
+                (filter == LibraryFilter.ALL || filter == LibraryFilter.PLAYLISTS)
+            val showMedia = searching || filter != LibraryFilter.PLAYLISTS
+            val nothingToShow =
+                (!showPlaylists || playlists.isEmpty()) && (!showMedia || items.isEmpty())
+
+            if (nothingToShow) {
+                item {
+                    Box(Modifier.fillMaxWidth().padding(top = 64.dp), contentAlignment = Alignment.Center) {
+                        EmptyState(
+                            title = if (filter == LibraryFilter.PLAYLISTS) "No playlists yet" else "Nothing here yet",
+                            subtitle = "Downloads will appear in your library.",
+                        )
                     }
-                } else {
+                }
+            } else {
+                if (showPlaylists) {
                     items(playlists, key = { "pl-${it.id}" }) { playlist ->
-                        PlaylistRow(
+                        PlaylistCard(
                             playlist = playlist,
                             onClick = { onOpenPlaylist(playlist.id) },
                             onToggleFavorite = { viewModel.togglePlaylistFavorite(playlist.id) },
@@ -103,28 +115,23 @@ fun LibraryScreen(
                         )
                     }
                 }
-            } else if (items.isEmpty()) {
-                item {
-                    Box(Modifier.fillMaxWidth().padding(top = 64.dp), contentAlignment = Alignment.Center) {
-                        EmptyState(title = "Nothing here yet", subtitle = "Downloads will appear in your library.")
-                    }
-                }
-            } else {
-                items(items, key = { it.id }) { media ->
-                    if (media.kind == MediaKind.MUSIC) {
-                        MusicRow(
-                            media = media,
-                            onClick = { onOpenMedia(media.id) },
-                            onToggleFavorite = { viewModel.toggleFavorite(media.id) },
-                            onDelete = { pendingDelete = media },
-                        )
-                    } else {
-                        VideoCard(
-                            media = media,
-                            onClick = { onOpenMedia(media.id) },
-                            onToggleFavorite = { viewModel.toggleFavorite(media.id) },
-                            onDelete = { pendingDelete = media },
-                        )
+                if (showMedia) {
+                    items(items, key = { it.id }) { media ->
+                        if (media.kind == MediaKind.MUSIC) {
+                            MusicRow(
+                                media = media,
+                                onClick = { onOpenMedia(media.id) },
+                                onToggleFavorite = { viewModel.toggleFavorite(media.id) },
+                                onDelete = { pendingDelete = media },
+                            )
+                        } else {
+                            VideoCard(
+                                media = media,
+                                onClick = { onOpenMedia(media.id) },
+                                onToggleFavorite = { viewModel.toggleFavorite(media.id) },
+                                onDelete = { pendingDelete = media },
+                            )
+                        }
                     }
                 }
             }

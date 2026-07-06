@@ -130,28 +130,7 @@ fun HomeScreen(
                 }
             }
 
-            // Playlists shelf — each playlist is one card that opens its own screen.
-            if (playlists.isNotEmpty() && chip == HomeChip.ALL) {
-                item { SectionHeader("Playlists") }
-                item {
-                    LazyRow(
-                        contentPadding = PaddingValues(horizontal = 12.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        items(playlists, key = { "pl-${it.id}" }) { playlist ->
-                            PlaylistCard(
-                                playlist = playlist,
-                                onClick = { onOpenPlaylist(playlist.id) },
-                                onToggleFavorite = { viewModel.togglePlaylistFavorite(playlist.id) },
-                                onDelete = { pendingDeletePlaylist = playlist },
-                            )
-                        }
-                    }
-                    Spacer(Modifier.height(8.dp))
-                }
-            }
-
-            // Continue watching shelf.
+            // Continue watching shelf (only on the "All" view).
             if (continueWatching.isNotEmpty() && chip == HomeChip.ALL) {
                 item { SectionHeader("Continue watching") }
                 item {
@@ -167,32 +146,50 @@ fun HomeScreen(
                 }
             }
 
-            if (feed.isEmpty()) {
+            // Playlists appear as full-size cards in the same feed. "All" shows
+            // playlists then standalone media; "Playlists" shows only playlists.
+            val showPlaylists = chip == HomeChip.ALL || chip == HomeChip.PLAYLISTS
+            val showMedia = chip != HomeChip.PLAYLISTS
+            val nothingToShow =
+                (!showPlaylists || playlists.isEmpty()) && (!showMedia || feed.isEmpty())
+
+            if (nothingToShow) {
                 item {
                     Box(Modifier.fillMaxWidth().padding(top = 80.dp), contentAlignment = Alignment.Center) {
                         EmptyState(
-                            title = "Your archive is empty",
+                            title = if (chip == HomeChip.PLAYLISTS) "No playlists yet" else "Your archive is empty",
                             subtitle = "Tap Download to save your first video, playlist or track for offline viewing.",
                         )
                     }
                 }
             } else {
-                // Main vertical feed of large cards.
-                items(feed, key = { it.id }) { media ->
-                    if (media.kind == MediaKind.MUSIC) {
-                        MusicRow(
-                            media = media,
-                            onClick = { openMedia(media.id) },
-                            onToggleFavorite = { viewModel.toggleFavorite(media.id) },
-                            onDelete = { pendingDelete = media },
+                if (showPlaylists) {
+                    items(playlists, key = { "pl-${it.id}" }) { playlist ->
+                        PlaylistCard(
+                            playlist = playlist,
+                            onClick = { onOpenPlaylist(playlist.id) },
+                            onToggleFavorite = { viewModel.togglePlaylistFavorite(playlist.id) },
+                            onDelete = { pendingDeletePlaylist = playlist },
                         )
-                    } else {
-                        VideoCard(
-                            media = media,
-                            onClick = { openMedia(media.id) },
-                            onToggleFavorite = { viewModel.toggleFavorite(media.id) },
-                            onDelete = { pendingDelete = media },
-                        )
+                    }
+                }
+                if (showMedia) {
+                    items(feed, key = { it.id }) { media ->
+                        if (media.kind == MediaKind.MUSIC) {
+                            MusicRow(
+                                media = media,
+                                onClick = { openMedia(media.id) },
+                                onToggleFavorite = { viewModel.toggleFavorite(media.id) },
+                                onDelete = { pendingDelete = media },
+                            )
+                        } else {
+                            VideoCard(
+                                media = media,
+                                onClick = { openMedia(media.id) },
+                                onToggleFavorite = { viewModel.toggleFavorite(media.id) },
+                                onDelete = { pendingDelete = media },
+                            )
+                        }
                     }
                 }
             }

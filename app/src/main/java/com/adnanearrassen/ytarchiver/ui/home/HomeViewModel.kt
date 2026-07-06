@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -22,6 +23,7 @@ enum class HomeChip(val label: String) {
     ALL("All"),
     VIDEOS("Videos"),
     MUSIC("Music"),
+    PLAYLISTS("Playlists"),
     FAVORITES("Favorites"),
 }
 
@@ -70,6 +72,7 @@ class HomeViewModel @Inject constructor(
                 HomeChip.VIDEOS -> libraryRepository.observeStandaloneByKind(MediaKind.VIDEO)
                 HomeChip.MUSIC -> libraryRepository.observeStandaloneByKind(MediaKind.MUSIC)
                 HomeChip.FAVORITES -> libraryRepository.observeFavorites()
+                HomeChip.PLAYLISTS -> flowOf(emptyList())
             }
         }
         .combine(_sort) { items, order -> order.sort(items) }
