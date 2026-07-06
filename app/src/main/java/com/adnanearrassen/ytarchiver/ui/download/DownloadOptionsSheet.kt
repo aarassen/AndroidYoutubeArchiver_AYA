@@ -29,8 +29,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import kotlinx.coroutines.launch
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.adnanearrassen.ytarchiver.domain.model.AppSettings
@@ -61,9 +63,19 @@ fun DownloadOptionsSheet(
     onDownloadMusic: (DownloadOptions.Music) -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val scope = rememberCoroutineScope()
     var advancedOpen by remember { mutableStateOf(false) }
     var videoOptions by remember { mutableStateOf(DefaultOptions.video(settings)) }
     var musicOptions by remember { mutableStateOf(DefaultOptions.music(settings)) }
+
+    // Fully animate the sheet closed BEFORE running the action (which navigates
+    // away). Removing the sheet at the same time as navigating can leave its
+    // overlay window capturing touches, making the next screen unclickable.
+    fun hideThenRun(action: () -> Unit) {
+        scope.launch { sheetState.hide() }.invokeOnCompletion {
+            if (!sheetState.isVisible) action()
+        }
+    }
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
         Column(
@@ -83,7 +95,7 @@ fun DownloadOptionsSheet(
             Spacer(Modifier.height(20.dp))
 
             Button(
-                onClick = { onDownloadVideo(videoOptions) },
+                onClick = { hideThenRun { onDownloadVideo(videoOptions) } },
                 modifier = Modifier.fillMaxWidth().height(56.dp),
             ) {
                 Icon(Icons.Filled.Videocam, contentDescription = null)
@@ -92,7 +104,7 @@ fun DownloadOptionsSheet(
             }
             Spacer(Modifier.height(10.dp))
             Button(
-                onClick = { onDownloadMusic(musicOptions) },
+                onClick = { hideThenRun { onDownloadMusic(musicOptions) } },
                 modifier = Modifier.fillMaxWidth().height(56.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.secondaryContainer,

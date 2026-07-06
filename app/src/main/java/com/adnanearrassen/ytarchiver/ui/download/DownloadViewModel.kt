@@ -47,11 +47,13 @@ class DownloadViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(url = value, error = null)
     }
 
+    /** Called when a link is shared/opened into the app: fill the field and
+     *  immediately analyze it. Overwrites any partially-typed URL because the
+     *  share is an explicit user action. */
     fun prefill(url: String) {
-        if (_uiState.value.url.isBlank()) {
-            _uiState.value = _uiState.value.copy(url = url)
-            analyze()
-        }
+        android.util.Log.d("YTShare", "Prefill + analyze shared url: $url")
+        _uiState.value = _uiState.value.copy(url = url, info = null, error = null)
+        analyze()
     }
 
     fun analyze() {

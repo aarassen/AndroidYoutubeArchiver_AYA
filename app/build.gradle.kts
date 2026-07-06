@@ -107,8 +107,9 @@ dependencies {
     // DataStore
     implementation(libs.androidx.datastore.preferences)
 
-    // Coil
+    // Coil (+ video-frame decoder for generating thumbnails from local files)
     implementation(libs.coil.compose)
+    implementation(libs.coil.video)
 
     // Media3 / ExoPlayer
     implementation(libs.androidx.media3.exoplayer)

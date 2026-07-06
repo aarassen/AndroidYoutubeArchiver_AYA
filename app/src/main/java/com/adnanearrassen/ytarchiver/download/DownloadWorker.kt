@@ -2,6 +2,7 @@ package com.adnanearrassen.ytarchiver.download
 
 import android.content.Context
 import android.content.pm.ServiceInfo
+import android.graphics.BitmapFactory
 import android.media.MediaScannerConnection
 import android.util.Log
 import androidx.hilt.work.HiltWorker
@@ -199,20 +200,43 @@ class DownloadWorker @AssistedInject constructor(
         )
     }
 
-    /** Downloads the remote thumbnail into app-private storage and returns its
-     *  local path, or null on any failure (thumbnails are best-effort). */
+    /**
+     * Downloads the remote thumbnail into app-private storage and returns its
+     * local path, or null on failure (thumbnails are best-effort). YouTube often
+     * serves thumbnails as WEBP; we decode and re-encode to JPEG so the image is
+     * guaranteed to render in Coil regardless of the source format.
+     */
     private fun downloadThumbnail(url: String?, downloadId: Long): String? {
-        if (url.isNullOrBlank()) return null
+        if (url.isNullOrBlank()) {
+            Log.d(TAG, "No thumbnail URL for download $downloadId")
+            return null
+        }
         return runCatching {
             val request = Request.Builder().url(url).build()
             httpClient.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) return null
+                if (!response.isSuccessful) {
+                    Log.w(TAG, "Thumbnail fetch failed HTTP ${response.code} for $url")
+                    return null
+                }
                 val bytes = response.body?.bytes() ?: return null
                 val file = File(storageLocator.thumbnailDir(), "thumb_$downloadId.jpg")
-                file.writeBytes(bytes)
+                val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                if (bitmap != null) {
+                    file.outputStream().use { out ->
+                        bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 90, out)
+                    }
+                    bitmap.recycle()
+                } else {
+                    // Couldn't decode (unlikely) — keep the raw bytes as a fallback.
+                    file.writeBytes(bytes)
+                }
+                Log.i(TAG, "Saved thumbnail (${file.length()} bytes) -> ${file.absolutePath}")
                 file.absolutePath
             }
-        }.getOrNull()
+        }.getOrElse {
+            Log.w(TAG, "Thumbnail save error for $downloadId: ${it.message}")
+            null
+        }
     }
 
     private fun resolveOutputDir(options: DownloadOptions): File {

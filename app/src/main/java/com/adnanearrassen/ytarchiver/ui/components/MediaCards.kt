@@ -56,7 +56,8 @@ fun VideoCard(
             .padding(bottom = 8.dp),
     ) {
         Thumbnail(
-            url = media.thumbnailPath,
+            // Prefer the saved image; fall back to a frame from the video file.
+            url = media.thumbnailPath ?: media.filePath,
             durationSeconds = media.durationSeconds,
             watchProgress = media.watchProgress,
             modifier = Modifier
@@ -126,7 +127,7 @@ fun CompactVideoCard(
             .clickable(onClick = onClick),
     ) {
         Thumbnail(
-            url = media.thumbnailPath,
+            url = media.thumbnailPath ?: media.filePath,
             durationSeconds = media.durationSeconds,
             watchProgress = media.watchProgress,
             modifier = Modifier.fillMaxWidth(),

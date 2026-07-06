@@ -2,13 +2,13 @@ package com.adnanearrassen.ytarchiver
 
 import android.content.Intent
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.adnanearrassen.ytarchiver.core.common.UrlUtils
@@ -22,11 +22,17 @@ import dagger.hilt.android.AndroidEntryPoint
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
+    // Reactive holder for a URL shared into the app. Updated on cold start and
+    // on onNewIntent — no Activity recreate(), which previously caused the UI to
+    // briefly become unresponsive.
+    private val sharedUrl = mutableStateOf<String?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        val initialSharedUrl = extractSharedUrl(intent)
+        sharedUrl.value = extractSharedUrl(intent)
+        Log.d(TAG, "onCreate sharedUrl=${sharedUrl.value}")
 
         setContent {
             val appViewModel: AppViewModel = hiltViewModel()
@@ -43,7 +49,6 @@ class MainActivity : ComponentActivity() {
                 dynamicColor = settings.dynamicColor,
                 accent = settings.themeColor.toAccentSeed(),
             ) {
-                val sharedUrl = remember { mutableStateOf(initialSharedUrl) }
                 AppRoot(
                     incomingUrl = sharedUrl.value,
                     onUrlConsumed = { sharedUrl.value = null },
@@ -55,9 +60,9 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        // A new share while the app is alive re-launches AppRoot with the URL
-        // by recreating; simplest robust behaviour for this skeleton.
-        extractSharedUrl(intent)?.let { recreate() }
+        val url = extractSharedUrl(intent)
+        Log.d(TAG, "onNewIntent sharedUrl=$url")
+        if (url != null) sharedUrl.value = url
     }
 
     private fun extractSharedUrl(intent: Intent?): String? {
@@ -68,6 +73,10 @@ class MainActivity : ComponentActivity() {
             else -> null
         } ?: return null
         return UrlUtils.firstUrlIn(raw)
+    }
+
+    companion object {
+        private const val TAG = "YTMain"
     }
 }
 

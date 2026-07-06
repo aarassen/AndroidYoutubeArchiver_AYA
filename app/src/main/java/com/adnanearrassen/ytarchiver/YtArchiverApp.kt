@@ -3,6 +3,9 @@ package com.adnanearrassen.ytarchiver
 import android.app.Application
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
+import coil.ImageLoader
+import coil.ImageLoaderFactory
+import coil.decode.VideoFrameDecoder
 import com.adnanearrassen.ytarchiver.core.common.NotificationChannels
 import com.adnanearrassen.ytarchiver.python.PythonRuntime
 import com.adnanearrassen.ytarchiver.domain.model.AppSettings
@@ -25,7 +28,7 @@ import com.adnanearrassen.ytarchiver.core.common.ApplicationScope
  *  - Kicks off an opportunistic yt-dlp update check on cold start.
  */
 @HiltAndroidApp
-class YtArchiverApp : Application(), Configuration.Provider {
+class YtArchiverApp : Application(), Configuration.Provider, ImageLoaderFactory {
 
     @Inject lateinit var workerFactory: HiltWorkerFactory
     @Inject lateinit var pythonRuntime: PythonRuntime
@@ -38,11 +41,34 @@ class YtArchiverApp : Application(), Configuration.Provider {
             .setWorkerFactory(workerFactory)
             .build()
 
+    /** Coil image loader that can also decode a frame from local video files,
+     *  so video cards always have a thumbnail even without a saved image. */
+    override fun newImageLoader(): ImageLoader =
+        ImageLoader.Builder(this)
+            .components { add(VideoFrameDecoder.Factory()) }
+            .crossfade(true)
+            .build()
+
     override fun onCreate() {
         super.onCreate()
+        if (BuildConfig.DEBUG) enableStrictModeLogging()
         NotificationChannels.createAll(this)
         pythonRuntime.start()
         maybeAutoUpdateEngine()
+    }
+
+    /** Logs (does not crash) any accidental disk/network work on the main thread,
+     *  which shows up in Logcat under the "StrictMode" tag — useful for tracking
+     *  down UI-freeze / not-clickable issues. Debug builds only. */
+    private fun enableStrictModeLogging() {
+        android.os.StrictMode.setThreadPolicy(
+            android.os.StrictMode.ThreadPolicy.Builder()
+                .detectDiskReads()
+                .detectDiskWrites()
+                .detectNetwork()
+                .penaltyLog()
+                .build()
+        )
     }
 
     private fun maybeAutoUpdateEngine() = appScope.launch {
