@@ -13,8 +13,27 @@ Public API:
 
 import json
 import os
+import shutil
 import sys
 import traceback
+
+# Optional path to a bundled ffmpeg binary (set via configure()). yt-dlp needs
+# ffmpeg to MERGE separate video+audio streams and to EXTRACT/convert audio.
+# Chaquopy does not ship ffmpeg, so unless one is provided we fall back to
+# stream selections that don't require it.
+_FFMPEG_LOCATION = None
+
+
+def _has_ffmpeg():
+    if _FFMPEG_LOCATION and os.path.exists(_FFMPEG_LOCATION):
+        return True
+    return shutil.which("ffmpeg") is not None
+
+
+def set_ffmpeg_location(path):
+    """Kotlin can point us at a bundled ffmpeg binary/dir once one is shipped."""
+    global _FFMPEG_LOCATION
+    _FFMPEG_LOCATION = path
 
 
 # ---------------------------------------------------------------------------
@@ -233,6 +252,7 @@ def download(url, options_json, out_dir, callback):
 
 def _build_ydl_opts(opts, outtmpl):
     dtype = opts.get("type", "VIDEO")
+    has_ffmpeg = _has_ffmpeg()
     common = {
         "quiet": True,
         "no_warnings": True,
@@ -243,39 +263,58 @@ def _build_ydl_opts(opts, outtmpl):
         "fragment_retries": 5,
         "continuedl": True,   # resume partial downloads
     }
+    if _FFMPEG_LOCATION:
+        common["ffmpeg_location"] = _FFMPEG_LOCATION
 
     if dtype == "MUSIC":
         common["format"] = "bestaudio/best"
-        audio_format = (opts.get("format") or "MP3").lower()
-        pp = {
-            "key": "FFmpegExtractAudio",
-            "preferredcodec": audio_format,
-        }
-        bitrate = opts.get("bitrateKbps")
-        if bitrate:
-            pp["preferredquality"] = str(bitrate)
-        common["postprocessors"].append(pp)
-        if opts.get("embedThumbnail"):
-            common["writethumbnail"] = True
-            common["postprocessors"].append({"key": "EmbedThumbnail"})
-        if opts.get("embedMetadata"):
-            common["postprocessors"].append({"key": "FFmpegMetadata"})
+        if has_ffmpeg:
+            # Transcode/convert to the requested format and embed art/metadata.
+            audio_format = (opts.get("format") or "MP3").lower()
+            pp = {"key": "FFmpegExtractAudio", "preferredcodec": audio_format}
+            bitrate = opts.get("bitrateKbps")
+            if bitrate:
+                pp["preferredquality"] = str(bitrate)
+            common["postprocessors"].append(pp)
+            if opts.get("embedThumbnail"):
+                common["writethumbnail"] = True
+                common["postprocessors"].append({"key": "EmbedThumbnail"})
+            if opts.get("embedMetadata"):
+                common["postprocessors"].append({"key": "FFmpegMetadata"})
+        # else: no ffmpeg -> keep the native audio stream (e.g. .m4a/.webm)
+        #       exactly as downloaded; still fully playable.
     else:
-        common["format"] = build_format(json.dumps(opts))
-        container = (opts.get("container") or "mp4").lower()
-        common["merge_output_format"] = container
-        if opts.get("embedMetadata"):
-            common["postprocessors"].append({"key": "FFmpegMetadata"})
-        if opts.get("embedThumbnail"):
-            common["writethumbnail"] = True
-            common["postprocessors"].append({"key": "EmbedThumbnail"})
-        if opts.get("downloadSubtitles"):
-            common["writesubtitles"] = True
-            common["writeautomaticsub"] = bool(opts.get("autoSubtitles"))
-            langs = opts.get("subtitleLanguages") or ["en"]
-            common["subtitleslangs"] = langs
-            if opts.get("embedSubtitles"):
-                common["postprocessors"].append({"key": "FFmpegEmbedSubtitle"})
+        if has_ffmpeg:
+            # Best quality: allow adaptive video+audio streams that need merging.
+            common["format"] = build_format(json.dumps(opts))
+            common["merge_output_format"] = (opts.get("container") or "mp4").lower()
+            if opts.get("embedMetadata"):
+                common["postprocessors"].append({"key": "FFmpegMetadata"})
+            if opts.get("embedThumbnail"):
+                common["writethumbnail"] = True
+                common["postprocessors"].append({"key": "EmbedThumbnail"})
+            if opts.get("downloadSubtitles"):
+                common["writesubtitles"] = True
+                common["writeautomaticsub"] = bool(opts.get("autoSubtitles"))
+                common["subtitleslangs"] = opts.get("subtitleLanguages") or ["en"]
+                if opts.get("embedSubtitles"):
+                    common["postprocessors"].append({"key": "FFmpegEmbedSubtitle"})
+        else:
+            # No ffmpeg -> pick a single pre-muxed (progressive) stream so no
+            # merge is required. On YouTube this tops out around 720p, but it
+            # works out of the box. Respect the requested max height if given.
+            height = opts.get("maxHeight")
+            if height:
+                common["format"] = (
+                    "best[ext=mp4][height<=?%d]/best[height<=?%d]/best" % (height, height)
+                )
+            else:
+                common["format"] = "best[ext=mp4]/best"
+            # Subtitles can still be written as separate .srt/.vtt sidecar files.
+            if opts.get("downloadSubtitles"):
+                common["writesubtitles"] = True
+                common["writeautomaticsub"] = bool(opts.get("autoSubtitles"))
+                common["subtitleslangs"] = opts.get("subtitleLanguages") or ["en"]
     return common
 
 

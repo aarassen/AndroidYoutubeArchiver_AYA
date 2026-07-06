@@ -41,13 +41,27 @@ bridge is still isolated behind interfaces
 [`YtDlpService`](app/src/main/java/com/adnanearrassen/ytarchiver/python/YtDlpService.kt)),
 so you can drop in a stub to build/run the UI without Python if needed.
 
-### 3. FFmpeg
-yt-dlp needs FFmpeg for remuxing / audio extraction / embedding. Chaquopy does
-**not** bundle an FFmpeg binary. To make remux/convert/embed features actually
-work you must ship an FFmpeg build (e.g. an `ffmpeg-kit` AAR or a prebuilt
-binary placed on `PATH` / passed via `ffmpeg_location`). Until then, downloads
-that require postprocessing will fail at the FFmpeg step. This is the biggest
-piece of runtime work remaining.
+### 3. FFmpeg (affects download quality, not whether downloads work)
+yt-dlp needs FFmpeg to **merge** adaptive video+audio streams (anything above
+~720p on YouTube), to **transcode** audio to MP3/FLAC/etc., and to **embed**
+thumbnails/metadata/subtitles. Chaquopy does not bundle an FFmpeg binary.
+
+`yt_archiver.py` now **detects FFmpeg** (`_has_ffmpeg()`) and degrades
+gracefully so downloads succeed without it:
+
+- **Video, no FFmpeg** → downloads a single pre-muxed (progressive) stream, so
+  no merge is needed. On YouTube this tops out around **720p**. Subtitles are
+  still saved as sidecar files.
+- **Music, no FFmpeg** → keeps the native audio stream (usually `.m4a`), fully
+  playable, but not re-encoded to your chosen format and without embedded art.
+- **With FFmpeg** → full behaviour (4K merges, MP3/FLAC conversion, embedding).
+
+To unlock full quality, ship an FFmpeg build and point the engine at it:
+call `set_ffmpeg_location(path)` (already exposed in `yt_archiver.py`) from
+`PythonRuntime` with the path to a bundled arm64 `ffmpeg` binary (e.g. from an
+`ffmpeg-kit` / prebuilt static build extracted to app storage and marked
+executable). `_has_ffmpeg()` will then return true and quality selection kicks
+back in automatically.
 
 ## What is fully implemented
 

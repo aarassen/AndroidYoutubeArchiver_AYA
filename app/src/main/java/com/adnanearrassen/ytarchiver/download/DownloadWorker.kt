@@ -2,6 +2,7 @@ package com.adnanearrassen.ytarchiver.download
 
 import android.content.Context
 import android.content.pm.ServiceInfo
+import android.util.Log
 import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.ForegroundInfo
@@ -49,8 +50,12 @@ class DownloadWorker @AssistedInject constructor(
 
     override suspend fun doWork(): Result {
         val id = inputData.getLong(KEY_DOWNLOAD_ID, -1L)
+        Log.i(TAG, "doWork start for download id=$id")
         if (id < 0) return Result.failure()
-        val entity = downloadDao.getById(id) ?: return Result.failure()
+        val entity = downloadDao.getById(id) ?: run {
+            Log.w(TAG, "No download row for id=$id")
+            return Result.failure()
+        }
 
         // Respect user actions taken before the worker started.
         if (entity.status == DownloadStatus.PAUSED || entity.status == DownloadStatus.CANCELED) {
@@ -113,6 +118,7 @@ class DownloadWorker @AssistedInject constructor(
                 Result.success()
             }
             is OpResult.Error -> {
+                Log.e(TAG, "Download failed for ${entity.sourceUrl}: ${outcome.message}")
                 val settings = settingsRepository.settings.first()
                 if (settings.autoRetryFailed && entity.retryCount < settings.maxRetries) {
                     downloadDao.update(
@@ -211,6 +217,7 @@ class DownloadWorker @AssistedInject constructor(
     }
 
     companion object {
+        private const val TAG = "DownloadWorker"
         const val KEY_DOWNLOAD_ID = "download_id"
         fun uniqueName(id: Long) = "download_$id"
         fun tag(id: Long) = "download_tag_$id"
