@@ -9,6 +9,8 @@ pluginManagement {
         }
         mavenCentral()
         gradlePluginPortal()
+        // Chaquopy (embedded Python) Gradle plugin.
+        maven { url = uri("https://chaquo.com/maven") }
     }
 }
 plugins {
@@ -19,6 +21,8 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        // Chaquopy (embedded Python) plugin + runtime artifacts.
+        maven { url = uri("https://chaquo.com/maven") }
     }
 }
 

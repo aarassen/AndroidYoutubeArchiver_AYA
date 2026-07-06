@@ -1,3 +1,11 @@
 <resources>
-    <string name="app_name">YoutubeArchiver</string>
+    <string name="app_name">YT Archiver</string>
+
+    <!-- Notification channels -->
+    <string name="channel_downloads_name">Downloads</string>
+    <string name="channel_downloads_desc">Shows progress of active downloads</string>
+    <string name="channel_playback_name">Playback</string>
+    <string name="channel_playback_desc">Media playback controls</string>
+    <string name="channel_updates_name">Updates</string>
+    <string name="channel_updates_desc">yt-dlp engine update status</string>
 </resources>
