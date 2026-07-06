@@ -1,5 +1,6 @@
 package com.adnanearrassen.ytarchiver.ui
 
+import android.util.Log
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -37,6 +38,8 @@ fun AppRoot(
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
 
+    LaunchedEffect(currentRoute) { Log.d("YTNav", "Current route = $currentRoute") }
+
     // A shared link routes straight to the Download tab, pre-filled.
     LaunchedEffect(incomingUrl) {
         if (incomingUrl != null) {
@@ -58,6 +61,7 @@ fun AppRoot(
                         NavigationBarItem(
                             selected = selected,
                             onClick = {
+                                Log.d("YTNav", "Bottom nav tapped -> ${dest.route}")
                                 navController.navigate(dest.route) {
                                     popUpTo(navController.graph.findStartDestination().id) {
                                         saveState = true

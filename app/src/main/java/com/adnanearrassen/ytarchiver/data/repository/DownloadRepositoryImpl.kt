@@ -10,8 +10,10 @@ import com.adnanearrassen.ytarchiver.domain.model.DownloadStatus
 import com.adnanearrassen.ytarchiver.domain.model.MediaInfo
 import com.adnanearrassen.ytarchiver.domain.repository.DownloadRepository
 import com.adnanearrassen.ytarchiver.download.DownloadScheduler
+import com.adnanearrassen.ytarchiver.storage.StorageLocator
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
@@ -22,15 +24,16 @@ import javax.inject.Singleton
 class DownloadRepositoryImpl @Inject constructor(
     private val dao: DownloadDao,
     private val scheduler: DownloadScheduler,
+    private val storageLocator: StorageLocator,
     private val json: Json,
     @IoDispatcher private val io: CoroutineDispatcher,
 ) : DownloadRepository {
 
     override fun observeQueue(): Flow<List<DownloadItem>> =
-        dao.observeQueue().map { list -> list.map { it.toDomain() } }
+        dao.observeQueue().map { list -> list.map { it.toDomain() } }.flowOn(io)
 
     override fun observeActive(): Flow<List<DownloadItem>> =
-        dao.observeActive().map { list -> list.map { it.toDomain() } }
+        dao.observeActive().map { list -> list.map { it.toDomain() } }.flowOn(io)
 
     override suspend fun enqueue(
         sourceUrl: String,
@@ -62,6 +65,12 @@ class DownloadRepositoryImpl @Inject constructor(
         options: DownloadOptions,
     ): List<Long> = withContext(io) {
         val entries = info.playlist?.entries.orEmpty()
+        // Route every entry into a dedicated folder named after the playlist.
+        val playlistName = info.playlist?.title ?: info.title
+        val folder = storageLocator.playlistDir(playlistName).absolutePath
+        val options = options.withOutputFolder(folder)
+        val optionsJson = json.encodeToString(DownloadOptions.serializer(), options)
+
         val ids = entries.map { entry ->
             val position = dao.maxQueuePosition() + 1
             dao.insert(
@@ -71,7 +80,7 @@ class DownloadRepositoryImpl @Inject constructor(
                     uploader = info.uploader,
                     thumbnailUrl = entry.thumbnailUrl,
                     type = options.type,
-                    optionsJson = json.encodeToString(DownloadOptions.serializer(), options),
+                    optionsJson = optionsJson,
                     status = DownloadStatus.QUEUED,
                     queuePosition = position,
                     createdAt = System.currentTimeMillis(),
@@ -80,6 +89,11 @@ class DownloadRepositoryImpl @Inject constructor(
         }
         scheduler.scheduleQueue()
         ids
+    }
+
+    private fun DownloadOptions.withOutputFolder(folder: String): DownloadOptions = when (this) {
+        is DownloadOptions.Video -> copy(outputFolder = folder)
+        is DownloadOptions.Music -> copy(outputFolder = folder)
     }
 
     override suspend fun pause(id: Long) = withContext(io) {

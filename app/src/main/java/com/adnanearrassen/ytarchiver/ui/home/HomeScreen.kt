@@ -13,8 +13,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -22,6 +25,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -55,7 +59,16 @@ fun HomeScreen(
     val feed by viewModel.feed.collectAsStateWithLifecycle()
     val continueWatching by viewModel.continueWatching.collectAsStateWithLifecycle()
     val chip by viewModel.chip.collectAsStateWithLifecycle()
+    val sortOrder by viewModel.sort.collectAsStateWithLifecycle()
     var pendingDelete by remember { mutableStateOf<ArchivedMedia?>(null) }
+
+    androidx.compose.runtime.LaunchedEffect(feed.size) {
+        android.util.Log.d("YTHome", "Feed updated: ${feed.size} items, chip=$chip, sort=$sortOrder")
+    }
+    val openMedia: (Long) -> Unit = { id ->
+        android.util.Log.d("YTHome", "Open media id=$id")
+        onOpenMedia(id)
+    }
 
     Scaffold(
         topBar = {
@@ -101,6 +114,17 @@ fun HomeScreen(
                 }
             }
 
+            // Sort selector.
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    SortMenu(current = sortOrder, onSelect = viewModel::setSort)
+                }
+            }
+
             // Continue watching shelf.
             if (continueWatching.isNotEmpty() && chip == HomeChip.ALL) {
                 item { SectionHeader("Continue watching") }
@@ -110,7 +134,7 @@ fun HomeScreen(
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
                         items(continueWatching, key = { "cw-${it.id}" }) { media ->
-                            CompactVideoCard(media = media, onClick = { onOpenMedia(media.id) })
+                            CompactVideoCard(media = media, onClick = { openMedia(media.id) })
                         }
                     }
                     Spacer(Modifier.height(8.dp))
@@ -132,14 +156,14 @@ fun HomeScreen(
                     if (media.kind == MediaKind.MUSIC) {
                         MusicRow(
                             media = media,
-                            onClick = { onOpenMedia(media.id) },
+                            onClick = { openMedia(media.id) },
                             onToggleFavorite = { viewModel.toggleFavorite(media.id) },
                             onDelete = { pendingDelete = media },
                         )
                     } else {
                         VideoCard(
                             media = media,
-                            onClick = { onOpenMedia(media.id) },
+                            onClick = { openMedia(media.id) },
                             onToggleFavorite = { viewModel.toggleFavorite(media.id) },
                             onDelete = { pendingDelete = media },
                         )
@@ -155,5 +179,24 @@ fun HomeScreen(
             onConfirm = { viewModel.delete(media.id); pendingDelete = null },
             onDismiss = { pendingDelete = null },
         )
+    }
+}
+
+@Composable
+private fun SortMenu(current: SortOrder, onSelect: (SortOrder) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        TextButton(onClick = { expanded = true }) {
+            Icon(Icons.AutoMirrored.Filled.Sort, contentDescription = null)
+            Text("  ${current.label}")
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            SortOrder.entries.forEach { order ->
+                DropdownMenuItem(
+                    text = { Text(order.label) },
+                    onClick = { onSelect(order); expanded = false },
+                )
+            }
+        }
     }
 }

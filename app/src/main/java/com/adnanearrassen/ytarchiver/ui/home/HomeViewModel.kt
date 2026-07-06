@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -23,6 +24,20 @@ enum class HomeChip(val label: String) {
     FAVORITES("Favorites"),
 }
 
+enum class SortOrder(val label: String) {
+    RECENT("Newest first"),
+    OLDEST("Oldest first"),
+    NAME("Name (A–Z)"),
+    SIZE("Largest first");
+
+    fun sort(items: List<ArchivedMedia>): List<ArchivedMedia> = when (this) {
+        RECENT -> items.sortedByDescending { it.addedAt }
+        OLDEST -> items.sortedBy { it.addedAt }
+        NAME -> items.sortedBy { it.title.lowercase() }
+        SIZE -> items.sortedByDescending { it.fileSizeBytes }
+    }
+}
+
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class HomeViewModel @Inject constructor(
@@ -32,12 +47,15 @@ class HomeViewModel @Inject constructor(
     private val _chip = MutableStateFlow(HomeChip.ALL)
     val chip: StateFlow<HomeChip> = _chip.asStateFlow()
 
+    private val _sort = MutableStateFlow(SortOrder.RECENT)
+    val sort: StateFlow<SortOrder> = _sort.asStateFlow()
+
     /** Horizontal "Continue watching" shelf shown above the feed. */
     val continueWatching: StateFlow<List<ArchivedMedia>> =
         libraryRepository.observeContinueWatching(10)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    /** The main vertical feed, filtered by the selected chip. */
+    /** The main vertical feed, filtered by the selected chip and sorted. */
     val feed: StateFlow<List<ArchivedMedia>> = _chip
         .flatMapLatest { chip ->
             when (chip) {
@@ -47,9 +65,11 @@ class HomeViewModel @Inject constructor(
                 HomeChip.FAVORITES -> libraryRepository.observeFavorites()
             }
         }
+        .combine(_sort) { items, order -> order.sort(items) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     fun setChip(chip: HomeChip) { _chip.value = chip }
+    fun setSort(order: SortOrder) { _sort.value = order }
 
     fun toggleFavorite(id: Long) = viewModelScope.launch {
         libraryRepository.toggleFavorite(id)

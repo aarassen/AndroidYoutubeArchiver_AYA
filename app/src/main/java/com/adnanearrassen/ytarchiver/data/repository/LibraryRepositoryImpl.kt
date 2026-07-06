@@ -18,6 +18,7 @@ import com.adnanearrassen.ytarchiver.domain.repository.LibraryRepository
 import com.adnanearrassen.ytarchiver.storage.StorageLocator
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -34,26 +35,30 @@ class LibraryRepositoryImpl @Inject constructor(
     @IoDispatcher private val io: CoroutineDispatcher,
 ) : LibraryRepository {
 
+    // NOTE: toDomain() touches the filesystem (File.exists()). These maps MUST
+    // run off the main thread — flowOn(io) keeps that disk I/O away from the UI
+    // dispatcher (viewModelScope collects on Main), otherwise the feed janks /
+    // freezes as the library grows after each download.
     override fun observeAll(): Flow<List<ArchivedMedia>> =
-        mediaDao.observeAll().map { it.map { e -> e.toDomain() } }
+        mediaDao.observeAll().map { it.map { e -> e.toDomain() } }.flowOn(io)
 
     override fun observeByKind(kind: MediaKind): Flow<List<ArchivedMedia>> =
-        mediaDao.observeByKind(kind).map { it.map { e -> e.toDomain() } }
+        mediaDao.observeByKind(kind).map { it.map { e -> e.toDomain() } }.flowOn(io)
 
     override fun observeRecentlyAdded(limit: Int): Flow<List<ArchivedMedia>> =
-        mediaDao.observeRecentlyAdded(limit).map { it.map { e -> e.toDomain() } }
+        mediaDao.observeRecentlyAdded(limit).map { it.map { e -> e.toDomain() } }.flowOn(io)
 
     override fun observeContinueWatching(limit: Int): Flow<List<ArchivedMedia>> =
-        mediaDao.observeContinueWatching(limit).map { it.map { e -> e.toDomain() } }
+        mediaDao.observeContinueWatching(limit).map { it.map { e -> e.toDomain() } }.flowOn(io)
 
     override fun observeFavorites(): Flow<List<ArchivedMedia>> =
-        mediaDao.observeFavorites().map { it.map { e -> e.toDomain() } }
+        mediaDao.observeFavorites().map { it.map { e -> e.toDomain() } }.flowOn(io)
 
     override fun observeDownloadedToday(): Flow<List<ArchivedMedia>> =
-        mediaDao.observeAddedSince(startOfToday()).map { it.map { e -> e.toDomain() } }
+        mediaDao.observeAddedSince(startOfToday()).map { it.map { e -> e.toDomain() } }.flowOn(io)
 
     override fun search(query: String): Flow<List<ArchivedMedia>> =
-        mediaDao.search(query).map { it.map { e -> e.toDomain() } }
+        mediaDao.search(query).map { it.map { e -> e.toDomain() } }.flowOn(io)
 
     override suspend fun getById(id: Long): ArchivedMedia? = withContext(io) {
         mediaDao.getById(id)?.toDomain()
@@ -78,7 +83,7 @@ class LibraryRepositoryImpl @Inject constructor(
     }
 
     override fun observePlaylists(): Flow<List<Playlist>> =
-        playlistDao.observePlaylistsWithStats().map { it.map { p -> p.toDomain() } }
+        playlistDao.observePlaylistsWithStats().map { it.map { p -> p.toDomain() } }.flowOn(io)
 
     override suspend fun createPlaylist(name: String, description: String?): Long = withContext(io) {
         playlistDao.insert(
@@ -145,7 +150,7 @@ class LibraryRepositoryImpl @Inject constructor(
     }
 
     override fun observeHistory(): Flow<List<DownloadHistoryRecord>> =
-        downloadDao.observeHistory().map { it.map { d -> d.toHistoryRecord() } }
+        downloadDao.observeHistory().map { it.map { d -> d.toHistoryRecord() } }.flowOn(io)
 
     private fun startOfToday(): Long = Calendar.getInstance().apply {
         set(Calendar.HOUR_OF_DAY, 0)

@@ -2,6 +2,7 @@ package com.adnanearrassen.ytarchiver.download
 
 import android.content.Context
 import android.content.pm.ServiceInfo
+import android.media.MediaScannerConnection
 import android.util.Log
 import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
@@ -27,6 +28,8 @@ import kotlinx.coroutines.flow.consumeAsFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
+import okhttp3.OkHttpClient
+import okhttp3.Request
 import java.io.File
 
 /**
@@ -45,6 +48,7 @@ class DownloadWorker @AssistedInject constructor(
     private val settingsRepository: SettingsRepository,
     private val notifier: DownloadNotifier,
     private val scheduler: DownloadScheduler,
+    private val httpClient: OkHttpClient,
     private val json: Json,
 ) : CoroutineWorker(appContext, params) {
 
@@ -152,6 +156,11 @@ class DownloadWorker @AssistedInject constructor(
         val codec = (options as? DownloadOptions.Video)?.videoCodec?.label
 
         val now = System.currentTimeMillis()
+        val thumbnailPath = downloadThumbnail(entity.thumbnailUrl, entity.id)
+        // Make the file visible to the system file manager / media apps.
+        runCatching {
+            MediaScannerConnection.scanFile(applicationContext, arrayOf(filePath), null, null)
+        }
         mediaDao.insert(
             ArchivedMediaEntity(
                 title = resolvedTitle,
@@ -159,7 +168,7 @@ class DownloadWorker @AssistedInject constructor(
                 channelId = null,
                 kind = kind,
                 filePath = filePath,
-                thumbnailPath = null,
+                thumbnailPath = thumbnailPath,
                 durationSeconds = durationSeconds,
                 fileSizeBytes = if (sizeBytes > 0) sizeBytes else file.length(),
                 resolutionLabel = resolutionLabel,
@@ -188,6 +197,22 @@ class DownloadWorker @AssistedInject constructor(
                 completedAt = System.currentTimeMillis(),
             )
         )
+    }
+
+    /** Downloads the remote thumbnail into app-private storage and returns its
+     *  local path, or null on any failure (thumbnails are best-effort). */
+    private fun downloadThumbnail(url: String?, downloadId: Long): String? {
+        if (url.isNullOrBlank()) return null
+        return runCatching {
+            val request = Request.Builder().url(url).build()
+            httpClient.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return null
+                val bytes = response.body?.bytes() ?: return null
+                val file = File(storageLocator.thumbnailDir(), "thumb_$downloadId.jpg")
+                file.writeBytes(bytes)
+                file.absolutePath
+            }
+        }.getOrNull()
     }
 
     private fun resolveOutputDir(options: DownloadOptions): File {

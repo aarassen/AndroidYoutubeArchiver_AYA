@@ -69,8 +69,11 @@ fun Thumbnail(
             .background(MaterialTheme.colorScheme.surfaceVariant),
     ) {
         if (url != null) {
+            // Remote URLs load directly; local file paths must be wrapped in a
+            // File so Coil doesn't try to parse them as a schemeless Uri.
+            val model: Any = if (url.startsWith("http")) url else java.io.File(url)
             AsyncImage(
-                model = url,
+                model = model,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),
