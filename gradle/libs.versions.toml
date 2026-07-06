@@ -1,8 +1,8 @@
 [versions]
 # --- Toolchain (stable, mutually-compatible set) ---
-agp = "9.2.1"
-kotlin = "2.2.10"
-ksp = "2.3.2"
+agp = "8.13.2"
+kotlin = "2.0.21"
+ksp = "2.0.21-1.0.28"
 composeBom = "2024.12.01"
 
 coreKtx = "1.15.0"
