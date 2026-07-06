@@ -1,6 +1,7 @@
 package com.adnanearrassen.ytarchiver.storage
 
 import android.content.Context
+import android.media.MediaScannerConnection
 import android.os.Environment
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
@@ -8,52 +9,77 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Resolves where archived media, thumbnails and the Python working directory
- * live.
+ * Resolves where archived media and all of its side-resources (thumbnail,
+ * subtitles, metadata) are stored, and keeps them together in a structured,
+ * file-manager-visible layout:
  *
- * Media is written to public, file-manager-visible folders under the shared
- * **Downloads** directory:
+ *     <root>/Videos/<title>.mp4
+ *     <root>/Videos/<title>.jpg          (thumbnail)
+ *     <root>/Videos/<title>.en.srt       (subtitles)
+ *     <root>/Videos/<title>.info.json    (metadata)
+ *     <root>/Music/<title>.mp3
+ *     <root>/Music/<title>.jpg
+ *     <root>/Playlists/<playlist name>/<title>.mp4  (+ its resources)
  *
- *     Download/YTArchiver/Videos
- *     Download/YTArchiver/Music
- *     Download/YTArchiver/Playlists/<playlist name>
- *
- * The Downloads collection is used (rather than Movies/Music) because it permits
- * files of any type — yt-dlp needs to write `.part`/`.ytdl` temp files during a
- * download, which the media collections (Movies/Music) reject on Android 11+.
- * Files an app creates here are readable/writable by that app via the File API
- * through FUSE without extra permissions, and stay on the device after uninstall.
- *
- * Thumbnails and the updatable engine stay in app-private internal storage.
+ * `<root>` defaults to the public **Downloads/YTArchiver** directory (visible in
+ * the system file manager, survives uninstall). The Downloads collection is used
+ * rather than Movies/Music because it accepts files of any type — yt-dlp writes
+ * `.part`/`.ytdl`/`.json`/subtitle files that the media collections reject on
+ * Android 11+. A user-chosen path (Settings > download path) overrides the root.
  */
 @Singleton
 class StorageLocator @Inject constructor(
     @ApplicationContext private val context: Context,
 ) {
-    private val rootFolderName = "YTArchiver"
+    private val appFolderName = "YTArchiver"
 
-    private fun downloadsRoot(): File =
-        File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), rootFolderName)
+    /** The default public root: Downloads/YTArchiver. */
+    private fun defaultRoot(): File =
+        File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), appFolderName)
 
-    /** Public root of the archive (used for storage stats). */
-    fun mediaRoot(): File = downloadsRoot().apply { mkdirs() }
+    /** The active root — a user override if provided, else the default. */
+    fun root(customPath: String? = null): File =
+        (customPath?.takeIf { it.isNotBlank() }?.let { File(it) } ?: defaultRoot())
+            .apply { mkdirs() }
 
-    fun videoDir(): File = File(downloadsRoot(), "Videos").apply { mkdirs() }
-    fun musicDir(): File = File(downloadsRoot(), "Music").apply { mkdirs() }
+    fun videoDir(customPath: String? = null): File =
+        File(root(customPath), "Videos").apply { mkdirs() }
 
-    /** Base folder for playlist downloads; each playlist gets its own subfolder. */
-    fun playlistDir(playlistName: String): File =
-        File(File(downloadsRoot(), "Playlists"), sanitize(playlistName)).apply { mkdirs() }
+    fun musicDir(customPath: String? = null): File =
+        File(root(customPath), "Music").apply { mkdirs() }
 
-    // App-private (not shown in the file manager, cleared on uninstall).
-    fun thumbnailDir(): File = File(context.filesDir, "thumbnails").apply { mkdirs() }
+    /** Each playlist download gets its own subfolder, sanitized. */
+    fun playlistDir(playlistName: String, customPath: String? = null): File =
+        File(File(root(customPath), "Playlists"), sanitize(playlistName)).apply { mkdirs() }
+
+    /** Public root used for storage-usage stats. */
+    fun mediaRoot(): File = defaultRoot().apply { mkdirs() }
+
+    // --- App-private working storage (cleared on uninstall) ---
     fun tempDir(): File = File(context.cacheDir, "downloads").apply { mkdirs() }
     fun engineDir(): File = File(context.filesDir, "engine").apply { mkdirs() }
 
-    /** Resolve a user-provided folder override, falling back to a default. */
+    /** Resolve a per-download folder override (e.g. a playlist folder). */
     fun resolveOrDefault(userPath: String?, default: File): File =
         userPath?.takeIf { it.isNotBlank() }?.let { File(it).apply { mkdirs() } } ?: default
 
+    /**
+     * Path of a side-resource that lives next to [mediaFilePath] and shares its
+     * base name, e.g. sibling("/…/My Video.mp4", "jpg") -> "/…/My Video.jpg".
+     */
+    fun sibling(mediaFilePath: String, extension: String): File {
+        val media = File(mediaFilePath)
+        return File(media.parentFile, media.nameWithoutExtension + "." + extension)
+    }
+
+    /** Registers a finished file with MediaStore so it appears in file/media apps. */
+    fun registerWithMediaStore(vararg paths: String) {
+        val existing = paths.filter { it.isNotBlank() && File(it).exists() }.toTypedArray()
+        if (existing.isNotEmpty()) {
+            runCatching { MediaScannerConnection.scanFile(context, existing, null, null) }
+        }
+    }
+
     private fun sanitize(name: String): String =
-        name.replace(Regex("[\\\\/:*?\"<>|]"), "_").take(80).ifBlank { "Playlist" }
+        name.replace(Regex("[\\\\/:*?\"<>|]"), "_").trim().take(80).ifBlank { "Playlist" }
 }

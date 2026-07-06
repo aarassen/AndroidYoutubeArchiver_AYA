@@ -52,6 +52,15 @@ interface DownloadRepository {
 interface LibraryRepository {
     fun observeAll(): Flow<List<ArchivedMedia>>
     fun observeByKind(kind: MediaKind): Flow<List<ArchivedMedia>>
+
+    /** Media that is NOT part of any playlist (for the main feed). */
+    fun observeStandalone(): Flow<List<ArchivedMedia>>
+    fun observeStandaloneByKind(kind: MediaKind): Flow<List<ArchivedMedia>>
+
+    /** A single playlist and its items (ordered by playlist index). */
+    fun observePlaylist(playlistId: Long): Flow<Playlist?>
+    fun observePlaylistItems(playlistId: Long): Flow<List<ArchivedMedia>>
+
     fun observeRecentlyAdded(limit: Int): Flow<List<ArchivedMedia>>
     fun observeContinueWatching(limit: Int): Flow<List<ArchivedMedia>>
     fun observeFavorites(): Flow<List<ArchivedMedia>>

@@ -45,6 +45,18 @@ class LibraryRepositoryImpl @Inject constructor(
     override fun observeByKind(kind: MediaKind): Flow<List<ArchivedMedia>> =
         mediaDao.observeByKind(kind).map { it.map { e -> e.toDomain() } }.flowOn(io)
 
+    override fun observeStandalone(): Flow<List<ArchivedMedia>> =
+        mediaDao.observeStandalone().map { it.map { e -> e.toDomain() } }.flowOn(io)
+
+    override fun observeStandaloneByKind(kind: MediaKind): Flow<List<ArchivedMedia>> =
+        mediaDao.observeStandaloneByKind(kind).map { it.map { e -> e.toDomain() } }.flowOn(io)
+
+    override fun observePlaylist(playlistId: Long): Flow<Playlist?> =
+        playlistDao.observePlaylistWithStats(playlistId).map { it?.toDomain() }.flowOn(io)
+
+    override fun observePlaylistItems(playlistId: Long): Flow<List<ArchivedMedia>> =
+        playlistDao.observeItems(playlistId).map { it.map { e -> e.toDomain() } }.flowOn(io)
+
     override fun observeRecentlyAdded(limit: Int): Flow<List<ArchivedMedia>> =
         mediaDao.observeRecentlyAdded(limit).map { it.map { e -> e.toDomain() } }.flowOn(io)
 
@@ -75,11 +87,28 @@ class LibraryRepositoryImpl @Inject constructor(
     override suspend fun delete(id: Long, deleteFile: Boolean) = withContext(io) {
         if (deleteFile) {
             mediaDao.getById(id)?.let { entity ->
-                runCatching { File(entity.filePath).delete() }
-                entity.thumbnailPath?.let { runCatching { File(it).delete() } }
+                // Remove the whole resource group (media + thumbnail + subtitles
+                // + metadata json), which all share the media's base name.
+                deleteResourceGroup(entity.filePath)
+                // Also clean up a thumbnail stored elsewhere (older downloads).
+                entity.thumbnailPath
+                    ?.takeIf { File(it).parent != File(entity.filePath).parent }
+                    ?.let { runCatching { File(it).delete() } }
             }
         }
         mediaDao.delete(id)
+    }
+
+    private fun deleteResourceGroup(mediaFilePath: String) {
+        val media = File(mediaFilePath)
+        val base = media.nameWithoutExtension
+        val dir = media.parentFile
+        if (dir != null) {
+            dir.listFiles { f -> f.isFile && f.name.startsWith("$base.") }
+                ?.forEach { runCatching { it.delete() } }
+        } else {
+            runCatching { media.delete() }
+        }
     }
 
     override fun observePlaylists(): Flow<List<Playlist>> =

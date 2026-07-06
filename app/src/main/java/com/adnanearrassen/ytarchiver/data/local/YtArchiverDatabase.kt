@@ -3,6 +3,8 @@ package com.adnanearrassen.ytarchiver.data.local
 import androidx.room.Database
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import com.adnanearrassen.ytarchiver.data.local.dao.DownloadDao
 import com.adnanearrassen.ytarchiver.data.local.dao.MediaDao
 import com.adnanearrassen.ytarchiver.data.local.dao.PlaylistDao
@@ -18,7 +20,7 @@ import com.adnanearrassen.ytarchiver.data.local.entity.PlaylistItemCrossRef
         PlaylistEntity::class,
         PlaylistItemCrossRef::class,
     ],
-    version = 1,
+    version = 2,
     exportSchema = false,
 )
 @TypeConverters(Converters::class)
@@ -29,5 +31,13 @@ abstract class YtArchiverDatabase : RoomDatabase() {
 
     companion object {
         const val NAME = "yt_archiver.db"
+
+        /** v2 tags downloads with their playlist + index so playlists keep order. */
+        val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE downloads ADD COLUMN playlistId INTEGER")
+                db.execSQL("ALTER TABLE downloads ADD COLUMN playlistIndex INTEGER NOT NULL DEFAULT 0")
+            }
+        }
     }
 }

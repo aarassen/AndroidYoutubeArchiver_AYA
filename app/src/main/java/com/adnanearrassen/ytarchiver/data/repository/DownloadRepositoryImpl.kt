@@ -2,17 +2,21 @@ package com.adnanearrassen.ytarchiver.data.repository
 
 import com.adnanearrassen.ytarchiver.core.common.IoDispatcher
 import com.adnanearrassen.ytarchiver.data.local.dao.DownloadDao
+import com.adnanearrassen.ytarchiver.data.local.dao.PlaylistDao
 import com.adnanearrassen.ytarchiver.data.local.entity.DownloadEntity
+import com.adnanearrassen.ytarchiver.data.local.entity.PlaylistEntity
 import com.adnanearrassen.ytarchiver.data.mapper.toDomain
 import com.adnanearrassen.ytarchiver.domain.model.DownloadItem
 import com.adnanearrassen.ytarchiver.domain.model.DownloadOptions
 import com.adnanearrassen.ytarchiver.domain.model.DownloadStatus
 import com.adnanearrassen.ytarchiver.domain.model.MediaInfo
 import com.adnanearrassen.ytarchiver.domain.repository.DownloadRepository
+import com.adnanearrassen.ytarchiver.domain.repository.SettingsRepository
 import com.adnanearrassen.ytarchiver.download.DownloadScheduler
 import com.adnanearrassen.ytarchiver.storage.StorageLocator
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
@@ -23,8 +27,10 @@ import javax.inject.Singleton
 @Singleton
 class DownloadRepositoryImpl @Inject constructor(
     private val dao: DownloadDao,
+    private val playlistDao: PlaylistDao,
     private val scheduler: DownloadScheduler,
     private val storageLocator: StorageLocator,
+    private val settingsRepository: SettingsRepository,
     private val json: Json,
     @IoDispatcher private val io: CoroutineDispatcher,
 ) : DownloadRepository {
@@ -65,13 +71,22 @@ class DownloadRepositoryImpl @Inject constructor(
         options: DownloadOptions,
     ): List<Long> = withContext(io) {
         val entries = info.playlist?.entries.orEmpty()
-        // Route every entry into a dedicated folder named after the playlist.
+        // Route every entry into a dedicated folder named after the playlist,
+        // under the user's configured download root.
+        val downloadPath = settingsRepository.settings.first().downloadPath
         val playlistName = info.playlist?.title ?: info.title
-        val folder = storageLocator.playlistDir(playlistName).absolutePath
+        val folder = storageLocator.playlistDir(playlistName, downloadPath).absolutePath
         val options = options.withOutputFolder(folder)
         val optionsJson = json.encodeToString(DownloadOptions.serializer(), options)
+        val now = System.currentTimeMillis()
 
-        val ids = entries.map { entry ->
+        // Create the playlist up front; each completed item is linked back to it
+        // (by the worker) at its original playlist index, so order is preserved.
+        val playlistId = playlistDao.insert(
+            PlaylistEntity(name = playlistName, createdAt = now)
+        )
+
+        val ids = entries.mapIndexed { index, entry ->
             val position = dao.maxQueuePosition() + 1
             dao.insert(
                 DownloadEntity(
@@ -83,7 +98,9 @@ class DownloadRepositoryImpl @Inject constructor(
                     optionsJson = optionsJson,
                     status = DownloadStatus.QUEUED,
                     queuePosition = position,
-                    createdAt = System.currentTimeMillis(),
+                    createdAt = now,
+                    playlistId = playlistId,
+                    playlistIndex = index + 1,
                 )
             )
         }

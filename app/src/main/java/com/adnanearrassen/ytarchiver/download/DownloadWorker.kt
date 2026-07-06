@@ -3,7 +3,6 @@ package com.adnanearrassen.ytarchiver.download
 import android.content.Context
 import android.content.pm.ServiceInfo
 import android.graphics.BitmapFactory
-import android.media.MediaScannerConnection
 import android.util.Log
 import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
@@ -11,8 +10,10 @@ import androidx.work.ForegroundInfo
 import androidx.work.WorkerParameters
 import com.adnanearrassen.ytarchiver.data.local.dao.DownloadDao
 import com.adnanearrassen.ytarchiver.data.local.dao.MediaDao
+import com.adnanearrassen.ytarchiver.data.local.dao.PlaylistDao
 import com.adnanearrassen.ytarchiver.data.local.entity.ArchivedMediaEntity
 import com.adnanearrassen.ytarchiver.data.local.entity.DownloadEntity
+import com.adnanearrassen.ytarchiver.data.local.entity.PlaylistItemCrossRef
 import com.adnanearrassen.ytarchiver.domain.model.DownloadOptions
 import com.adnanearrassen.ytarchiver.domain.model.DownloadStatus
 import com.adnanearrassen.ytarchiver.domain.model.DownloadType
@@ -44,6 +45,7 @@ class DownloadWorker @AssistedInject constructor(
     @Assisted params: WorkerParameters,
     private val downloadDao: DownloadDao,
     private val mediaDao: MediaDao,
+    private val playlistDao: PlaylistDao,
     private val ytDlpService: YtDlpService,
     private val storageLocator: StorageLocator,
     private val settingsRepository: SettingsRepository,
@@ -86,7 +88,8 @@ class DownloadWorker @AssistedInject constructor(
             return@coroutineScope Result.failure()
         }
 
-        val outputDir = resolveOutputDir(options)
+        val settings = settingsRepository.settings.first()
+        val outputDir = resolveOutputDir(options, settings.downloadPath)
 
         // Persist progress off the Python callback thread via a conflated channel.
         val progressChannel = Channel<com.adnanearrassen.ytarchiver.domain.model.DownloadProgress>(Channel.CONFLATED)
@@ -124,7 +127,6 @@ class DownloadWorker @AssistedInject constructor(
             }
             is OpResult.Error -> {
                 Log.e(TAG, "Download failed for ${entity.sourceUrl}: ${outcome.message}")
-                val settings = settingsRepository.settings.first()
                 if (settings.autoRetryFailed && entity.retryCount < settings.maxRetries) {
                     downloadDao.update(
                         entity.copy(
@@ -157,12 +159,12 @@ class DownloadWorker @AssistedInject constructor(
         val codec = (options as? DownloadOptions.Video)?.videoCodec?.label
 
         val now = System.currentTimeMillis()
-        val thumbnailPath = downloadThumbnail(entity.thumbnailUrl, entity.id)
-        // Make the file visible to the system file manager / media apps.
-        runCatching {
-            MediaScannerConnection.scanFile(applicationContext, arrayOf(filePath), null, null)
-        }
-        mediaDao.insert(
+        // Save the thumbnail next to the media (same base name) as a resource,
+        // then register the media + every side-resource (thumbnail, subtitles,
+        // metadata json) with MediaStore so they appear in the file manager.
+        val thumbnailPath = saveThumbnailNextTo(filePath, entity.thumbnailUrl)
+        storageLocator.registerWithMediaStore(*siblingFiles(filePath).toTypedArray())
+        val mediaId = mediaDao.insert(
             ArchivedMediaEntity(
                 title = resolvedTitle,
                 uploader = entity.uploader,
@@ -178,6 +180,17 @@ class DownloadWorker @AssistedInject constructor(
                 addedAt = now,
             )
         )
+        // Link into its playlist at the original index so order is preserved.
+        entity.playlistId?.let { playlistId ->
+            playlistDao.addItem(
+                PlaylistItemCrossRef(
+                    playlistId = playlistId,
+                    mediaId = mediaId,
+                    position = entity.playlistIndex,
+                    addedAt = now,
+                )
+            )
+        }
         downloadDao.update(
             entity.copy(
                 status = DownloadStatus.COMPLETED,
@@ -201,14 +214,14 @@ class DownloadWorker @AssistedInject constructor(
     }
 
     /**
-     * Downloads the remote thumbnail into app-private storage and returns its
-     * local path, or null on failure (thumbnails are best-effort). YouTube often
-     * serves thumbnails as WEBP; we decode and re-encode to JPEG so the image is
-     * guaranteed to render in Coil regardless of the source format.
+     * Downloads the remote thumbnail and saves it NEXT TO the media file, sharing
+     * its base name (e.g. "My Video.jpg" beside "My Video.mp4"). YouTube often
+     * serves WEBP; we decode and re-encode to JPEG so it renders everywhere.
+     * Returns the local path, or null on failure (thumbnails are best-effort).
      */
-    private fun downloadThumbnail(url: String?, downloadId: Long): String? {
+    private fun saveThumbnailNextTo(mediaFilePath: String, url: String?): String? {
         if (url.isNullOrBlank()) {
-            Log.d(TAG, "No thumbnail URL for download $downloadId")
+            Log.d(TAG, "No thumbnail URL for $mediaFilePath")
             return null
         }
         return runCatching {
@@ -219,7 +232,7 @@ class DownloadWorker @AssistedInject constructor(
                     return null
                 }
                 val bytes = response.body?.bytes() ?: return null
-                val file = File(storageLocator.thumbnailDir(), "thumb_$downloadId.jpg")
+                val file = storageLocator.sibling(mediaFilePath, "jpg")
                 val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
                 if (bitmap != null) {
                     file.outputStream().use { out ->
@@ -234,14 +247,26 @@ class DownloadWorker @AssistedInject constructor(
                 file.absolutePath
             }
         }.getOrElse {
-            Log.w(TAG, "Thumbnail save error for $downloadId: ${it.message}")
+            Log.w(TAG, "Thumbnail save error for $mediaFilePath: ${it.message}")
             null
         }
     }
 
-    private fun resolveOutputDir(options: DownloadOptions): File {
-        val default = if (options.type == DownloadType.MUSIC) storageLocator.musicDir()
-        else storageLocator.videoDir()
+    /** All files that share the media's base name in its folder: the media
+     *  itself, thumbnail, subtitles (.srt/.vtt) and metadata (.info.json). */
+    private fun siblingFiles(mediaFilePath: String): List<String> {
+        val media = File(mediaFilePath)
+        val base = media.nameWithoutExtension
+        val dir = media.parentFile ?: return listOf(mediaFilePath)
+        return dir.listFiles { f -> f.isFile && f.name.startsWith("$base.") }
+            ?.map { it.absolutePath }
+            ?.ifEmpty { listOf(mediaFilePath) }
+            ?: listOf(mediaFilePath)
+    }
+
+    private fun resolveOutputDir(options: DownloadOptions, downloadPath: String?): File {
+        val default = if (options.type == DownloadType.MUSIC) storageLocator.musicDir(downloadPath)
+        else storageLocator.videoDir(downloadPath)
         val override = when (options) {
             is DownloadOptions.Video -> options.outputFolder
             is DownloadOptions.Music -> options.outputFolder

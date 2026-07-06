@@ -266,6 +266,11 @@ def _build_ydl_opts(opts, outtmpl):
     if _FFMPEG_LOCATION:
         common["ffmpeg_location"] = _FFMPEG_LOCATION
 
+    # Save a full metadata sidecar (<title>.info.json) next to the media as a
+    # resource, so the structured folder keeps everything about the download.
+    if opts.get("embedMetadata"):
+        common["writeinfojson"] = True
+
     if dtype == "MUSIC":
         common["format"] = "bestaudio/best"
         if has_ffmpeg:

@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.adnanearrassen.ytarchiver.domain.model.ArchivedMedia
 import com.adnanearrassen.ytarchiver.domain.model.MediaKind
+import com.adnanearrassen.ytarchiver.domain.model.Playlist
 import com.adnanearrassen.ytarchiver.domain.repository.LibraryRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -55,13 +56,19 @@ class HomeViewModel @Inject constructor(
         libraryRepository.observeContinueWatching(10)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    /** The main vertical feed, filtered by the selected chip and sorted. */
+    /** Downloaded playlists, shown as their own cards (not scattered videos). */
+    val playlists: StateFlow<List<Playlist>> =
+        libraryRepository.observePlaylists()
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** The main vertical feed — standalone media only (playlist members are
+     *  represented by their playlist card, not listed individually). */
     val feed: StateFlow<List<ArchivedMedia>> = _chip
         .flatMapLatest { chip ->
             when (chip) {
-                HomeChip.ALL -> libraryRepository.observeAll()
-                HomeChip.VIDEOS -> libraryRepository.observeByKind(MediaKind.VIDEO)
-                HomeChip.MUSIC -> libraryRepository.observeByKind(MediaKind.MUSIC)
+                HomeChip.ALL -> libraryRepository.observeStandalone()
+                HomeChip.VIDEOS -> libraryRepository.observeStandaloneByKind(MediaKind.VIDEO)
+                HomeChip.MUSIC -> libraryRepository.observeStandaloneByKind(MediaKind.MUSIC)
                 HomeChip.FAVORITES -> libraryRepository.observeFavorites()
             }
         }

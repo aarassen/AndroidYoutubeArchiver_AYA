@@ -1,5 +1,6 @@
 package com.adnanearrassen.ytarchiver.data.local.entity
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
@@ -35,6 +36,10 @@ data class DownloadEntity(
     val errorMessage: String? = null,
     val outputPath: String? = null,
     val workId: String? = null,
+    /** Non-null when this download is part of a playlist. */
+    val playlistId: Long? = null,
+    /** 1-based position of this item within its playlist (preserves order). */
+    @ColumnInfo(defaultValue = "0") val playlistIndex: Int = 0,
     val createdAt: Long,
     val startedAt: Long? = null,
     val completedAt: Long? = null,

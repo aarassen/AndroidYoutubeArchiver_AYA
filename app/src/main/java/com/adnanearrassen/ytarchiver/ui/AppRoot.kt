@@ -28,6 +28,7 @@ import com.adnanearrassen.ytarchiver.ui.manager.DownloadManagerScreen
 import com.adnanearrassen.ytarchiver.ui.navigation.Routes
 import com.adnanearrassen.ytarchiver.ui.navigation.TopLevelDestination
 import com.adnanearrassen.ytarchiver.ui.player.PlayerScreen
+import com.adnanearrassen.ytarchiver.ui.playlist.PlaylistDetailScreen
 import com.adnanearrassen.ytarchiver.ui.settings.SettingsScreen
 import com.adnanearrassen.ytarchiver.ui.storage.StorageScreen
 import com.adnanearrassen.ytarchiver.ui.update.EngineUpdateScreen
@@ -88,6 +89,7 @@ fun AppRoot(
             composable(TopLevelDestination.HOME.route) {
                 HomeScreen(
                     onOpenMedia = { navController.navigate(Routes.player(it)) },
+                    onOpenPlaylist = { navController.navigate(Routes.playlist(it)) },
                     onQuickDownload = { switchTab(TopLevelDestination.DOWNLOAD.route) },
                     onSeeStorage = { navController.navigate(Routes.STORAGE) },
                 )
@@ -102,6 +104,7 @@ fun AppRoot(
             composable(TopLevelDestination.LIBRARY.route) {
                 LibraryScreen(
                     onOpenMedia = { navController.navigate(Routes.player(it)) },
+                    onOpenPlaylist = { navController.navigate(Routes.playlist(it)) },
                 )
             }
             composable(TopLevelDestination.MANAGER.route) {
@@ -116,6 +119,12 @@ fun AppRoot(
             }
             composable("${Routes.PLAYER}/{${Routes.ARG_MEDIA_ID}}") {
                 PlayerScreen(onBack = { navController.popBackStack() })
+            }
+            composable("${Routes.PLAYLIST}/{${Routes.ARG_PLAYLIST_ID}}") {
+                PlaylistDetailScreen(
+                    onBack = { navController.popBackStack() },
+                    onOpenMedia = { navController.navigate(Routes.player(it)) },
+                )
             }
             composable(Routes.STORAGE) {
                 StorageScreen(onBack = { navController.popBackStack() })

@@ -45,6 +45,7 @@ import com.adnanearrassen.ytarchiver.ui.components.CompactVideoCard
 import com.adnanearrassen.ytarchiver.ui.components.ConfirmDeleteDialog
 import com.adnanearrassen.ytarchiver.ui.components.EmptyState
 import com.adnanearrassen.ytarchiver.ui.components.MusicRow
+import com.adnanearrassen.ytarchiver.ui.components.PlaylistCard
 import com.adnanearrassen.ytarchiver.ui.components.SectionHeader
 import com.adnanearrassen.ytarchiver.ui.components.VideoCard
 
@@ -52,12 +53,14 @@ import com.adnanearrassen.ytarchiver.ui.components.VideoCard
 @Composable
 fun HomeScreen(
     onOpenMedia: (Long) -> Unit,
+    onOpenPlaylist: (Long) -> Unit,
     onQuickDownload: () -> Unit,
     onSeeStorage: () -> Unit,
     viewModel: HomeViewModel = hiltViewModel(),
 ) {
     val feed by viewModel.feed.collectAsStateWithLifecycle()
     val continueWatching by viewModel.continueWatching.collectAsStateWithLifecycle()
+    val playlists by viewModel.playlists.collectAsStateWithLifecycle()
     val chip by viewModel.chip.collectAsStateWithLifecycle()
     val sortOrder by viewModel.sort.collectAsStateWithLifecycle()
     var pendingDelete by remember { mutableStateOf<ArchivedMedia?>(null) }
@@ -122,6 +125,22 @@ fun HomeScreen(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     SortMenu(current = sortOrder, onSelect = viewModel::setSort)
+                }
+            }
+
+            // Playlists shelf — each playlist is one card that opens its own screen.
+            if (playlists.isNotEmpty() && chip == HomeChip.ALL) {
+                item { SectionHeader("Playlists") }
+                item {
+                    LazyRow(
+                        contentPadding = PaddingValues(horizontal = 12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        items(playlists, key = { "pl-${it.id}" }) { playlist ->
+                            PlaylistCard(playlist = playlist, onClick = { onOpenPlaylist(playlist.id) })
+                        }
+                    }
+                    Spacer(Modifier.height(8.dp))
                 }
             }
 

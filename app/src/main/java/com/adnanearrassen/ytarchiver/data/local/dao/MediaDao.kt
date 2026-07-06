@@ -24,6 +24,22 @@ interface MediaDao {
     @Query("SELECT * FROM archived_media WHERE kind = :kind ORDER BY addedAt DESC")
     fun observeByKind(kind: MediaKind): Flow<List<ArchivedMediaEntity>>
 
+    // --- "Standalone" = not a member of any playlist. Used for the main feed so
+    //     playlist videos are shown via their playlist card, not individually. ---
+    @Query(
+        """SELECT * FROM archived_media
+           WHERE id NOT IN (SELECT mediaId FROM playlist_items)
+           ORDER BY addedAt DESC"""
+    )
+    fun observeStandalone(): Flow<List<ArchivedMediaEntity>>
+
+    @Query(
+        """SELECT * FROM archived_media
+           WHERE kind = :kind AND id NOT IN (SELECT mediaId FROM playlist_items)
+           ORDER BY addedAt DESC"""
+    )
+    fun observeStandaloneByKind(kind: MediaKind): Flow<List<ArchivedMediaEntity>>
+
     @Query("SELECT * FROM archived_media ORDER BY addedAt DESC LIMIT :limit")
     fun observeRecentlyAdded(limit: Int): Flow<List<ArchivedMediaEntity>>
 

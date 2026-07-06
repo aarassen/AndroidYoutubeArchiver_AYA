@@ -34,15 +34,18 @@ import com.adnanearrassen.ytarchiver.domain.model.MediaKind
 import com.adnanearrassen.ytarchiver.ui.components.ConfirmDeleteDialog
 import com.adnanearrassen.ytarchiver.ui.components.EmptyState
 import com.adnanearrassen.ytarchiver.ui.components.MusicRow
+import com.adnanearrassen.ytarchiver.ui.components.PlaylistRow
 import com.adnanearrassen.ytarchiver.ui.components.VideoCard
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LibraryScreen(
     onOpenMedia: (Long) -> Unit,
+    onOpenPlaylist: (Long) -> Unit,
     viewModel: LibraryViewModel = hiltViewModel(),
 ) {
     val items by viewModel.items.collectAsStateWithLifecycle()
+    val playlists by viewModel.playlists.collectAsStateWithLifecycle()
     val filter by viewModel.filter.collectAsStateWithLifecycle()
     val query by viewModel.query.collectAsStateWithLifecycle()
     var pendingDelete by remember { mutableStateOf<ArchivedMedia?>(null) }
@@ -81,7 +84,19 @@ fun LibraryScreen(
                 }
             }
 
-            if (items.isEmpty()) {
+            if (filter == LibraryFilter.PLAYLISTS) {
+                if (playlists.isEmpty() && query.isBlank()) {
+                    item {
+                        Box(Modifier.fillMaxWidth().padding(top = 64.dp), contentAlignment = Alignment.Center) {
+                            EmptyState(title = "No playlists yet", subtitle = "Download a playlist to see it here.")
+                        }
+                    }
+                } else {
+                    items(playlists, key = { "pl-${it.id}" }) { playlist ->
+                        PlaylistRow(playlist = playlist, onClick = { onOpenPlaylist(playlist.id) })
+                    }
+                }
+            } else if (items.isEmpty()) {
                 item {
                     Box(Modifier.fillMaxWidth().padding(top = 64.dp), contentAlignment = Alignment.Center) {
                         EmptyState(title = "Nothing here yet", subtitle = "Downloads will appear in your library.")

@@ -39,16 +39,43 @@ interface PlaylistDao {
     suspend fun getById(id: Long): PlaylistEntity?
 
     @Query(
-        """SELECT p.id, p.name, p.description, p.thumbnailPath, p.isFavorite, p.isPinned, p.createdAt,
+        """SELECT p.id, p.name, p.description,
+                  COALESCE(p.thumbnailPath, (
+                      SELECT COALESCE(m2.thumbnailPath, m2.filePath) FROM playlist_items pi2
+                      JOIN archived_media m2 ON m2.id = pi2.mediaId
+                      WHERE pi2.playlistId = p.id
+                      ORDER BY pi2.position ASC LIMIT 1
+                  )) AS thumbnailPath,
+                  p.isFavorite, p.isPinned, p.createdAt,
                   COUNT(pi.mediaId) AS itemCount,
                   COALESCE(SUM(m.durationSeconds), 0) AS totalDurationSeconds
            FROM playlists p
            LEFT JOIN playlist_items pi ON pi.playlistId = p.id
            LEFT JOIN archived_media m ON m.id = pi.mediaId
            GROUP BY p.id
+           HAVING itemCount > 0
            ORDER BY p.isPinned DESC, p.createdAt DESC"""
     )
     fun observePlaylistsWithStats(): Flow<List<PlaylistWithStats>>
+
+    @Query(
+        """SELECT p.id, p.name, p.description,
+                  COALESCE(p.thumbnailPath, (
+                      SELECT COALESCE(m2.thumbnailPath, m2.filePath) FROM playlist_items pi2
+                      JOIN archived_media m2 ON m2.id = pi2.mediaId
+                      WHERE pi2.playlistId = p.id
+                      ORDER BY pi2.position ASC LIMIT 1
+                  )) AS thumbnailPath,
+                  p.isFavorite, p.isPinned, p.createdAt,
+                  COUNT(pi.mediaId) AS itemCount,
+                  COALESCE(SUM(m.durationSeconds), 0) AS totalDurationSeconds
+           FROM playlists p
+           LEFT JOIN playlist_items pi ON pi.playlistId = p.id
+           LEFT JOIN archived_media m ON m.id = pi.mediaId
+           WHERE p.id = :id
+           GROUP BY p.id"""
+    )
+    fun observePlaylistWithStats(id: Long): Flow<PlaylistWithStats?>
 
     @Query("UPDATE playlists SET name = :name WHERE id = :id")
     suspend fun rename(id: Long, name: String)

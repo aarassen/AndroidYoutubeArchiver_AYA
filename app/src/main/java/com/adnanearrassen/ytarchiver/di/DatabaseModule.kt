@@ -26,6 +26,7 @@ object DatabaseModule {
     @Provides @Singleton
     fun database(@ApplicationContext context: Context): YtArchiverDatabase =
         Room.databaseBuilder(context, YtArchiverDatabase::class.java, YtArchiverDatabase.NAME)
+            .addMigrations(YtArchiverDatabase.MIGRATION_1_2)
             .fallbackToDestructiveMigration()
             .build()
 
