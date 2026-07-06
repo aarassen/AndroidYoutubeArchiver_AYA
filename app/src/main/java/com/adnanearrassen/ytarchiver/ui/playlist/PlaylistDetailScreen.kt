@@ -19,6 +19,8 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -48,13 +50,21 @@ import com.adnanearrassen.ytarchiver.ui.components.Thumbnail
 @Composable
 fun PlaylistDetailScreen(
     onBack: () -> Unit,
-    onOpenMedia: (Long) -> Unit,
+    onPlay: (playlistId: Long, mediaId: Long) -> Unit,
     viewModel: PlaylistDetailViewModel = hiltViewModel(),
 ) {
     val playlist by viewModel.playlist.collectAsStateWithLifecycle()
     val items by viewModel.items.collectAsStateWithLifecycle()
     var pendingDelete by remember { mutableStateOf<ArchivedMedia?>(null) }
     var showDeletePlaylist by remember { mutableStateOf(false) }
+
+    // Resume = most recently watched, unfinished item; else the first item.
+    val resumeItem = remember(items) {
+        items.filter { it.lastWatchedAt != null && it.watchProgress < 0.98f }
+            .maxByOrNull { it.lastWatchedAt ?: 0L }
+            ?: items.firstOrNull()
+    }
+    val hasProgress = resumeItem?.let { it.playbackPositionMs > 0 } == true
 
     Scaffold(
         topBar = {
@@ -101,6 +111,15 @@ fun PlaylistDetailScreen(
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
+                        Spacer(Modifier.height(12.dp))
+                        Button(
+                            onClick = { resumeItem?.let { onPlay(viewModel.playlistId, it.id) } },
+                            enabled = resumeItem != null,
+                            modifier = Modifier.fillMaxWidth().height(48.dp),
+                        ) {
+                            Icon(Icons.Filled.PlayArrow, contentDescription = null)
+                            Text(if (hasProgress) "  Resume playlist" else "  Play playlist", fontWeight = FontWeight.SemiBold)
+                        }
                     }
                 }
             }
@@ -108,7 +127,7 @@ fun PlaylistDetailScreen(
                 PlaylistItemRow(
                     index = index + 1,
                     media = media,
-                    onClick = { onOpenMedia(media.id) },
+                    onClick = { onPlay(viewModel.playlistId, media.id) },
                     onToggleFavorite = { viewModel.toggleFavorite(media.id) },
                     onDelete = { pendingDelete = media },
                 )

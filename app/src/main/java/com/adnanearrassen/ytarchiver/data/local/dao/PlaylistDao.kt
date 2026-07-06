@@ -72,6 +72,26 @@ interface PlaylistDao {
            FROM playlists p
            LEFT JOIN playlist_items pi ON pi.playlistId = p.id
            LEFT JOIN archived_media m ON m.id = pi.mediaId
+           GROUP BY p.id
+           HAVING itemCount > 0
+           ORDER BY p.createdAt DESC"""
+    )
+    suspend fun getPlaylistsWithStatsOnce(): List<PlaylistWithStats>
+
+    @Query(
+        """SELECT p.id, p.name, p.description,
+                  COALESCE(p.thumbnailPath, (
+                      SELECT COALESCE(m2.thumbnailPath, m2.filePath) FROM playlist_items pi2
+                      JOIN archived_media m2 ON m2.id = pi2.mediaId
+                      WHERE pi2.playlistId = p.id
+                      ORDER BY pi2.position ASC LIMIT 1
+                  )) AS thumbnailPath,
+                  p.isFavorite, p.isPinned, p.createdAt,
+                  COUNT(pi.mediaId) AS itemCount,
+                  COALESCE(SUM(m.durationSeconds), 0) AS totalDurationSeconds
+           FROM playlists p
+           LEFT JOIN playlist_items pi ON pi.playlistId = p.id
+           LEFT JOIN archived_media m ON m.id = pi.mediaId
            WHERE p.id = :id
            GROUP BY p.id"""
     )
@@ -102,6 +122,14 @@ interface PlaylistDao {
            ORDER BY pi.position ASC"""
     )
     fun observeItems(playlistId: Long): Flow<List<ArchivedMediaEntity>>
+
+    @Query(
+        """SELECT m.* FROM archived_media m
+           INNER JOIN playlist_items pi ON pi.mediaId = m.id
+           WHERE pi.playlistId = :playlistId
+           ORDER BY pi.position ASC"""
+    )
+    suspend fun getItems(playlistId: Long): List<ArchivedMediaEntity>
 
     @Query("SELECT * FROM playlist_items WHERE playlistId = :playlistId ORDER BY position ASC")
     suspend fun itemsOf(playlistId: Long): List<PlaylistItemCrossRef>

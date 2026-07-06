@@ -39,7 +39,7 @@
             android:label="@string/app_name"
             android:launchMode="singleTask"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|smallestScreenSize"
-            android:theme="@style/Theme.YoutubeArchiver"
+            android:theme="@style/Theme.YoutubeArchiver.Splash"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -63,6 +63,12 @@
                 <data android:scheme="https" android:host="music.youtube.com" />
             </intent-filter>
         </activity>
+
+        <!-- Embedded web server (LAN) foreground service -->
+        <service
+            android:name=".server.WebServerService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
 
         <!-- Media3 playback service: background music + notification controls -->
         <service

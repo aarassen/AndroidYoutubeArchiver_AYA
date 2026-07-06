@@ -1,11 +1,17 @@
 package com.adnanearrassen.ytarchiver
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -27,9 +33,15 @@ class MainActivity : ComponentActivity() {
     // briefly become unresponsive.
     private val sharedUrl = mutableStateOf<String?>(null)
 
+    private val requestNotifications =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { /* best-effort */ }
+
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Show the branded splash, then swap to the app theme.
+        installSplashScreen()
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        maybeRequestNotificationPermission()
 
         sharedUrl.value = extractSharedUrl(intent)
         Log.d(TAG, "onCreate sharedUrl=${sharedUrl.value}")
@@ -54,6 +66,15 @@ class MainActivity : ComponentActivity() {
                     onUrlConsumed = { sharedUrl.value = null },
                 )
             }
+        }
+    }
+
+    private fun maybeRequestNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            requestNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
     }
 

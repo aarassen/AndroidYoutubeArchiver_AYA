@@ -57,6 +57,10 @@ class LibraryRepositoryImpl @Inject constructor(
     override fun observePlaylistItems(playlistId: Long): Flow<List<ArchivedMedia>> =
         playlistDao.observeItems(playlistId).map { it.map { e -> e.toDomain() } }.flowOn(io)
 
+    override suspend fun getPlaylistItems(playlistId: Long): List<ArchivedMedia> = withContext(io) {
+        playlistDao.getItems(playlistId).map { it.toDomain() }
+    }
+
     override fun observeRecentlyAdded(limit: Int): Flow<List<ArchivedMedia>> =
         mediaDao.observeRecentlyAdded(limit).map { it.map { e -> e.toDomain() } }.flowOn(io)
 

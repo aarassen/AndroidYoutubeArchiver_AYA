@@ -20,7 +20,7 @@ class PlaylistDetailViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
-    private val playlistId: Long =
+    val playlistId: Long =
         savedStateHandle.get<String>(Routes.ARG_PLAYLIST_ID)?.toLongOrNull() ?: -1L
 
     val playlist: StateFlow<Playlist?> = libraryRepository.observePlaylist(playlistId)

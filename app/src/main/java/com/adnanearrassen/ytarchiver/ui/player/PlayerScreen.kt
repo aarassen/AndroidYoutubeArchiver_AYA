@@ -31,6 +31,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Brightness6
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ClosedCaption
+import androidx.compose.material.icons.filled.ClosedCaptionOff
 import androidx.compose.material.icons.filled.Forward10
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -79,6 +81,8 @@ fun PlayerScreen(
     viewModel: PlayerViewModel = hiltViewModel(),
 ) {
     val media by viewModel.media.collectAsStateWithLifecycle()
+    val hasSubtitles by viewModel.hasSubtitles.collectAsStateWithLifecycle()
+    var subtitlesEnabled by remember { mutableStateOf(false) }
     val player = viewModel.player
     val context = LocalContext.current
     val activity = remember(context) { context.findActivity() }
@@ -163,6 +167,11 @@ fun PlayerScreen(
             delay(700)
             indicatorVisible = false
         }
+    }
+
+    // Re-apply the subtitle preference when the current item changes (playlist).
+    LaunchedEffect(media?.id, subtitlesEnabled) {
+        viewModel.setSubtitlesEnabled(subtitlesEnabled)
     }
 
     BackHandler { onBack() }
@@ -262,6 +271,9 @@ fun PlayerScreen(
                 isPlaying = isPlaying,
                 position = if (scrubbing) scrubPosition.toLong() else position,
                 duration = duration,
+                showSubtitleButton = hasSubtitles,
+                subtitlesEnabled = subtitlesEnabled,
+                onToggleSubtitles = { subtitlesEnabled = !subtitlesEnabled },
                 onClose = onBack,
                 onPlayPause = {
                     if (player.isPlaying) player.pause() else player.play()
@@ -285,6 +297,9 @@ private fun PlayerControls(
     isPlaying: Boolean,
     position: Long,
     duration: Long,
+    showSubtitleButton: Boolean,
+    subtitlesEnabled: Boolean,
+    onToggleSubtitles: () -> Unit,
     onClose: () -> Unit,
     onPlayPause: () -> Unit,
     onRewind: () -> Unit,
@@ -315,8 +330,17 @@ private fun PlayerControls(
                 style = MaterialTheme.typography.titleMedium,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(start = 4.dp),
+                modifier = Modifier.weight(1f).padding(start = 4.dp),
             )
+            if (showSubtitleButton) {
+                IconButton(onClick = onToggleSubtitles) {
+                    Icon(
+                        if (subtitlesEnabled) Icons.Filled.ClosedCaption else Icons.Filled.ClosedCaptionOff,
+                        contentDescription = "Subtitles",
+                        tint = Color.White,
+                    )
+                }
+            }
         }
 
         // Center transport: rewind / play-pause / forward.

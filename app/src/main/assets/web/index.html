@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>YT Archiver</title>
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header>
+    <div class="brand"><span class="logo">⬇</span> YT Archiver</div>
+    <nav id="tabs">
+        <button class="tab active" data-tab="library">Library</button>
+        <button class="tab" data-tab="playlists">Playlists</button>
+        <button class="tab" data-tab="download">Download</button>
+    </nav>
+</header>
+
+<main>
+    <section id="library" class="page active">
+        <div class="grid" id="library-grid"></div>
+        <div class="empty" id="library-empty" hidden>No downloads yet.</div>
+    </section>
+
+    <section id="playlists" class="page">
+        <div id="playlists-list"></div>
+        <div class="empty" id="playlists-empty" hidden>No playlists yet.</div>
+    </section>
+
+    <section id="download" class="page">
+        <div class="dl">
+            <input id="dl-url" type="text" placeholder="Paste a YouTube video, playlist or music URL">
+            <div class="dl-actions">
+                <button class="btn primary" onclick="submitDownload('video')">Download Video</button>
+                <button class="btn" onclick="submitDownload('music')">Download Music</button>
+            </div>
+            <div id="dl-status" class="dl-status"></div>
+            <h3>Queue</h3>
+            <div id="queue-list" class="queue"></div>
+        </div>
+    </section>
+</main>
+
+<div id="overlay" class="overlay hidden">
+    <div class="player">
+        <button class="close" onclick="closePlayer()">✕</button>
+        <div id="player-media"></div>
+        <div id="player-title" class="player-title"></div>
+        <div id="player-up-next" class="up-next"></div>
+    </div>
+</div>
+
+<script src="/app.js"></script>
+</body>
+</html>

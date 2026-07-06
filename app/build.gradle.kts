@@ -82,6 +82,7 @@ dependencies {
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.core.splashscreen)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
@@ -131,6 +132,9 @@ dependencies {
 
     // Permissions
     implementation(libs.accompanist.permissions)
+
+    // Embedded HTTP server (web UI to browse/play/download over LAN)
+    implementation(libs.nanohttpd)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.android)

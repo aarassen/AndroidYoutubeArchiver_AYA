@@ -46,6 +46,7 @@ fun SettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
+    val webServer by viewModel.webServerState.collectAsStateWithLifecycle()
 
     Scaffold(
         topBar = { TopAppBar(title = { Text("Settings", fontWeight = FontWeight.Bold) }) },
@@ -144,6 +145,26 @@ fun SettingsScreen(
                 }
             }
             item { SwitchRow("Use dynamic (Material You) color", settings.dynamicColor) { v -> viewModel.update { it.copy(dynamicColor = v) } } }
+
+            item { SettingsSection("Web server (LAN)") }
+            item {
+                SwitchRow(
+                    title = "Run web server",
+                    checked = webServer.running,
+                    subtitle = webServer.url
+                        ?: "Browse, play and control downloads from any browser on your Wi-Fi",
+                ) { viewModel.toggleWebServer() }
+            }
+            if (webServer.running && webServer.url != null) {
+                item {
+                    Text(
+                        "Open ${webServer.url} in a browser on the same network.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(vertical = 4.dp),
+                    )
+                }
+            }
 
             item { SettingsSection("Updates & data") }
             item { SwitchRow("Auto-update yt-dlp engine", settings.autoUpdateYtDlp) { v -> viewModel.update { it.copy(autoUpdateYtDlp = v) } } }

@@ -82,6 +82,13 @@ interface MediaDao {
     @Query("SELECT * FROM archived_media")
     suspend fun getAllOnce(): List<ArchivedMediaEntity>
 
+    @Query(
+        """SELECT * FROM archived_media
+           WHERE id NOT IN (SELECT mediaId FROM playlist_items)
+           ORDER BY addedAt DESC"""
+    )
+    suspend fun getStandaloneOnce(): List<ArchivedMediaEntity>
+
     @Query("SELECT COALESCE(SUM(fileSizeBytes),0) FROM archived_media WHERE kind = :kind")
     suspend fun totalSizeForKind(kind: MediaKind): Long
 }

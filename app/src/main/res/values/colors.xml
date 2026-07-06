@@ -4,4 +4,6 @@
     <color name="white">#FFFFFFFF</color>
     <!-- Light-mode window background (matches Compose LightBackground) -->
     <color name="window_background">#FFFAFAFA</color>
+    <!-- Splash screen background (brand red; white icon glyph sits on top) -->
+    <color name="splash_background">#FFC1271D</color>
 </resources>

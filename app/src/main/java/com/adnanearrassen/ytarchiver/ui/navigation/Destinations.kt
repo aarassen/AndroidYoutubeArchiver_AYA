@@ -29,7 +29,10 @@ object Routes {
     const val HISTORY = "history"
     const val ENGINE_UPDATE = "engine_update"
 
-    fun player(mediaId: Long) = "$PLAYER/$mediaId"
+    /** Optionally pass a playlistId to play the whole playlist as a queue. */
+    fun player(mediaId: Long, playlistId: Long? = null) =
+        "$PLAYER/$mediaId" + (playlistId?.let { "?$ARG_PLAYLIST_ID=$it" } ?: "")
+
     fun playlist(playlistId: Long) = "$PLAYLIST/$playlistId"
 
     const val ARG_MEDIA_ID = "mediaId"

@@ -60,6 +60,8 @@ interface LibraryRepository {
     /** A single playlist and its items (ordered by playlist index). */
     fun observePlaylist(playlistId: Long): Flow<Playlist?>
     fun observePlaylistItems(playlistId: Long): Flow<List<ArchivedMedia>>
+    /** One-shot ordered items — used to build the playlist playback queue. */
+    suspend fun getPlaylistItems(playlistId: Long): List<ArchivedMedia>
 
     fun observeRecentlyAdded(limit: Int): Flow<List<ArchivedMedia>>
     fun observeContinueWatching(limit: Int): Flow<List<ArchivedMedia>>

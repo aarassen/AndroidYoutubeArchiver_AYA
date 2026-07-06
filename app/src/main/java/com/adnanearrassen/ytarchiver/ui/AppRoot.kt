@@ -16,7 +16,9 @@ import androidx.compose.ui.Modifier
 import androidx.navigation.NavController
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
+import androidx.navigation.navArgument
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
@@ -117,13 +119,24 @@ fun AppRoot(
                     onOpenStorage = { navController.navigate(Routes.STORAGE) },
                 )
             }
-            composable("${Routes.PLAYER}/{${Routes.ARG_MEDIA_ID}}") {
+            composable(
+                route = "${Routes.PLAYER}/{${Routes.ARG_MEDIA_ID}}?${Routes.ARG_PLAYLIST_ID}={${Routes.ARG_PLAYLIST_ID}}",
+                arguments = listOf(
+                    navArgument(Routes.ARG_MEDIA_ID) { type = NavType.StringType },
+                    navArgument(Routes.ARG_PLAYLIST_ID) {
+                        type = NavType.StringType; nullable = true; defaultValue = null
+                    },
+                ),
+            ) {
                 PlayerScreen(onBack = { navController.popBackStack() })
             }
             composable("${Routes.PLAYLIST}/{${Routes.ARG_PLAYLIST_ID}}") {
                 PlaylistDetailScreen(
                     onBack = { navController.popBackStack() },
-                    onOpenMedia = { navController.navigate(Routes.player(it)) },
+                    // Playing from a playlist queues the whole playlist so it auto-advances.
+                    onPlay = { playlistId, mediaId ->
+                        navController.navigate(Routes.player(mediaId, playlistId))
+                    },
                 )
             }
             composable(Routes.STORAGE) {
