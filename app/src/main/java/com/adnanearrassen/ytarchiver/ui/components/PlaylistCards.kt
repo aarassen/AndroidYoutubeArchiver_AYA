@@ -66,6 +66,8 @@ fun PlaylistCard(
     playlist: Playlist,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    onToggleFavorite: (() -> Unit)? = null,
+    onDelete: (() -> Unit)? = null,
 ) {
     Column(
         modifier = modifier
@@ -74,19 +76,26 @@ fun PlaylistCard(
     ) {
         PlaylistCover(playlist)
         Spacer(Modifier.height(6.dp))
-        Text(
-            text = playlist.name,
-            style = MaterialTheme.typography.bodyLarge,
-            fontWeight = FontWeight.SemiBold,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-        )
-        Text(
-            text = "Playlist · ${playlist.itemCount} videos",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-        )
+        Row(verticalAlignment = Alignment.Top) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = playlist.name,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = "Playlist · ${playlist.itemCount} videos",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                )
+            }
+            if (onDelete != null || onToggleFavorite != null) {
+                MediaOverflowMenu(playlist.isFavorite, onToggleFavorite, onDelete)
+            }
+        }
     }
 }
 
@@ -96,12 +105,14 @@ fun PlaylistRow(
     playlist: Playlist,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    onToggleFavorite: (() -> Unit)? = null,
+    onDelete: (() -> Unit)? = null,
 ) {
     Row(
         modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 8.dp),
+            .padding(start = 12.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         PlaylistCover(playlist, modifier = Modifier.width(150.dp))
@@ -126,6 +137,9 @@ fun PlaylistRow(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
             )
+        }
+        if (onDelete != null || onToggleFavorite != null) {
+            MediaOverflowMenu(playlist.isFavorite, onToggleFavorite, onDelete)
         }
     }
 }

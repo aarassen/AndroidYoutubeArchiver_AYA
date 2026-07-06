@@ -37,4 +37,13 @@ class PlaylistDetailViewModel @Inject constructor(
     fun delete(id: Long) = viewModelScope.launch {
         libraryRepository.delete(id, deleteFile = true)
     }
+
+    fun togglePlaylistFavorite() = viewModelScope.launch {
+        libraryRepository.togglePlaylistFavorite(playlistId)
+    }
+
+    /** Deletes the whole playlist and all its downloaded videos. */
+    fun deletePlaylist() = viewModelScope.launch {
+        libraryRepository.deletePlaylist(playlistId, deleteMedia = true)
+    }
 }

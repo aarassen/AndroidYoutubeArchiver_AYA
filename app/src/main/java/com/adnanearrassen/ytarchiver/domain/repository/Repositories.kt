@@ -75,7 +75,10 @@ interface LibraryRepository {
     fun observePlaylists(): Flow<List<Playlist>>
     suspend fun createPlaylist(name: String, description: String?): Long
     suspend fun renamePlaylist(id: Long, name: String)
-    suspend fun deletePlaylist(id: Long)
+    /** Deletes the playlist; if [deleteMedia] is true, also deletes every item
+     *  in it (files included). */
+    suspend fun deletePlaylist(id: Long, deleteMedia: Boolean)
+    suspend fun togglePlaylistFavorite(id: Long)
     suspend fun addToPlaylist(playlistId: Long, mediaId: Long)
     suspend fun removeFromPlaylist(playlistId: Long, mediaId: Long)
     suspend fun setPlaylistPinned(id: Long, pinned: Boolean)

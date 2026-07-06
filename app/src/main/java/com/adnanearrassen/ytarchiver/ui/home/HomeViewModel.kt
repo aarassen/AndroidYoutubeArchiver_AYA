@@ -85,4 +85,12 @@ class HomeViewModel @Inject constructor(
     fun delete(id: Long) = viewModelScope.launch {
         libraryRepository.delete(id, deleteFile = true)
     }
+
+    fun togglePlaylistFavorite(id: Long) = viewModelScope.launch {
+        libraryRepository.togglePlaylistFavorite(id)
+    }
+
+    fun deletePlaylist(id: Long) = viewModelScope.launch {
+        libraryRepository.deletePlaylist(id, deleteMedia = true)
+    }
 }

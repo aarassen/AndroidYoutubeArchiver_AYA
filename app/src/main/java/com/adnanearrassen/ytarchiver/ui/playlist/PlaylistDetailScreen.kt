@@ -16,6 +16,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -51,6 +54,7 @@ fun PlaylistDetailScreen(
     val playlist by viewModel.playlist.collectAsStateWithLifecycle()
     val items by viewModel.items.collectAsStateWithLifecycle()
     var pendingDelete by remember { mutableStateOf<ArchivedMedia?>(null) }
+    var showDeletePlaylist by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -58,6 +62,20 @@ fun PlaylistDetailScreen(
                 title = { Text(playlist?.name ?: "Playlist", maxLines = 1, overflow = TextOverflow.Ellipsis) },
                 navigationIcon = {
                     IconButton(onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") }
+                },
+                actions = {
+                    val isFav = playlist?.isFavorite == true
+                    IconButton(onClick = { viewModel.togglePlaylistFavorite() }) {
+                        Icon(
+                            if (isFav) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
+                            contentDescription = "Favorite",
+                            tint = if (isFav) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    IconButton(onClick = { showDeletePlaylist = true }) {
+                        Icon(Icons.Filled.Delete, contentDescription = "Delete playlist")
+                    }
                 },
             )
         },
@@ -103,6 +121,21 @@ fun PlaylistDetailScreen(
             title = media.title,
             onConfirm = { viewModel.delete(media.id); pendingDelete = null },
             onDismiss = { pendingDelete = null },
+        )
+    }
+
+    if (showDeletePlaylist) {
+        val p = playlist
+        ConfirmDeleteDialog(
+            title = p?.name ?: "Playlist",
+            heading = "Delete playlist?",
+            message = "\"${p?.name ?: "This playlist"}\" and its ${p?.itemCount ?: 0} downloaded videos will be permanently removed.",
+            onConfirm = {
+                viewModel.deletePlaylist()
+                showDeletePlaylist = false
+                onBack()
+            },
+            onDismiss = { showDeletePlaylist = false },
         )
     }
 }

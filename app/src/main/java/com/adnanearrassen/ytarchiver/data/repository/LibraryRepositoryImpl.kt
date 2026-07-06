@@ -124,8 +124,24 @@ class LibraryRepositoryImpl @Inject constructor(
         playlistDao.rename(id, name)
     }
 
-    override suspend fun deletePlaylist(id: Long) = withContext(io) {
+    override suspend fun deletePlaylist(id: Long, deleteMedia: Boolean) = withContext(io) {
+        if (deleteMedia) {
+            // Delete every item's file + DB row; CASCADE removes the cross-refs.
+            playlistDao.itemsOf(id).forEach { item ->
+                mediaDao.getById(item.mediaId)?.let { entity ->
+                    deleteResourceGroup(entity.filePath)
+                    entity.thumbnailPath
+                        ?.takeIf { File(it).parent != File(entity.filePath).parent }
+                        ?.let { runCatching { File(it).delete() } }
+                }
+                mediaDao.delete(item.mediaId)
+            }
+        }
         playlistDao.delete(id)
+    }
+
+    override suspend fun togglePlaylistFavorite(id: Long) = withContext(io) {
+        playlistDao.toggleFavorite(id)
     }
 
     override suspend fun addToPlaylist(playlistId: Long, mediaId: Long) = withContext(io) {

@@ -41,6 +41,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.adnanearrassen.ytarchiver.domain.model.ArchivedMedia
 import com.adnanearrassen.ytarchiver.domain.model.MediaKind
+import com.adnanearrassen.ytarchiver.domain.model.Playlist
 import com.adnanearrassen.ytarchiver.ui.components.CompactVideoCard
 import com.adnanearrassen.ytarchiver.ui.components.ConfirmDeleteDialog
 import com.adnanearrassen.ytarchiver.ui.components.EmptyState
@@ -64,6 +65,7 @@ fun HomeScreen(
     val chip by viewModel.chip.collectAsStateWithLifecycle()
     val sortOrder by viewModel.sort.collectAsStateWithLifecycle()
     var pendingDelete by remember { mutableStateOf<ArchivedMedia?>(null) }
+    var pendingDeletePlaylist by remember { mutableStateOf<Playlist?>(null) }
 
     androidx.compose.runtime.LaunchedEffect(feed.size) {
         android.util.Log.d("YTHome", "Feed updated: ${feed.size} items, chip=$chip, sort=$sortOrder")
@@ -137,7 +139,12 @@ fun HomeScreen(
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
                         items(playlists, key = { "pl-${it.id}" }) { playlist ->
-                            PlaylistCard(playlist = playlist, onClick = { onOpenPlaylist(playlist.id) })
+                            PlaylistCard(
+                                playlist = playlist,
+                                onClick = { onOpenPlaylist(playlist.id) },
+                                onToggleFavorite = { viewModel.togglePlaylistFavorite(playlist.id) },
+                                onDelete = { pendingDeletePlaylist = playlist },
+                            )
                         }
                     }
                     Spacer(Modifier.height(8.dp))
@@ -197,6 +204,16 @@ fun HomeScreen(
             title = media.title,
             onConfirm = { viewModel.delete(media.id); pendingDelete = null },
             onDismiss = { pendingDelete = null },
+        )
+    }
+
+    pendingDeletePlaylist?.let { pl ->
+        ConfirmDeleteDialog(
+            title = pl.name,
+            heading = "Delete playlist?",
+            message = "\"${pl.name}\" and its ${pl.itemCount} downloaded videos will be permanently removed.",
+            onConfirm = { viewModel.deletePlaylist(pl.id); pendingDeletePlaylist = null },
+            onDismiss = { pendingDeletePlaylist = null },
         )
     }
 }

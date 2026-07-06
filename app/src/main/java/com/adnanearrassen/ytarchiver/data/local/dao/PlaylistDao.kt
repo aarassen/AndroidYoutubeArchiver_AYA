@@ -83,6 +83,9 @@ interface PlaylistDao {
     @Query("UPDATE playlists SET isPinned = :pinned WHERE id = :id")
     suspend fun setPinned(id: Long, pinned: Boolean)
 
+    @Query("UPDATE playlists SET isFavorite = NOT isFavorite WHERE id = :id")
+    suspend fun toggleFavorite(id: Long)
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun addItem(ref: PlaylistItemCrossRef)
 
