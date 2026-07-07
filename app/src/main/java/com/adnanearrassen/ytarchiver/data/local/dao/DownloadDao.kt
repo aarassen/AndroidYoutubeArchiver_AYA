@@ -68,6 +68,15 @@ interface DownloadDao {
     @Query("DELETE FROM downloads WHERE status IN ('COMPLETED','CANCELED')")
     suspend fun clearFinished()
 
+    /** Ids of pending (not actively downloading, not completed) items — so their
+     *  WorkManager jobs can be cancelled before the rows are deleted. */
+    @Query("SELECT id FROM downloads WHERE status IN ('QUEUED','PAUSED','FAILED','ANALYZING')")
+    suspend fun pendingIds(): List<Long>
+
+    /** Removes every queued / paused / failed item (the whole pending queue). */
+    @Query("DELETE FROM downloads WHERE status IN ('QUEUED','PAUSED','FAILED','ANALYZING')")
+    suspend fun clearQueued()
+
     @Query("DELETE FROM downloads WHERE id = :id")
     suspend fun delete(id: Long)
 

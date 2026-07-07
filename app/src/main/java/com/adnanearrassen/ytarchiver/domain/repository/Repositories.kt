@@ -48,6 +48,9 @@ interface DownloadRepository {
     suspend fun moveUp(id: Long)
     suspend fun moveDown(id: Long)
     suspend fun clearFinished()
+
+    /** Cancels + removes every queued / paused / failed item at once. */
+    suspend fun clearQueued()
 }
 
 /** The offline library: archived media + playlists + storage stats. */

@@ -30,8 +30,12 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.AlertDialog
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -51,12 +55,20 @@ fun DownloadManagerScreen(
     viewModel: DownloadManagerViewModel = hiltViewModel(),
 ) {
     val queue by viewModel.queue.collectAsStateWithLifecycle()
+    var confirmClearQueue by remember { mutableStateOf(false) }
+    val pendingCount = queue.count {
+        it.status == DownloadStatus.QUEUED || it.status == DownloadStatus.PAUSED ||
+            it.status == DownloadStatus.FAILED || it.status == DownloadStatus.ANALYZING
+    }
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("Downloads", fontWeight = FontWeight.Bold) },
                 actions = {
+                    if (pendingCount > 0) {
+                        TextButton(onClick = { confirmClearQueue = true }) { Text("Clear queue") }
+                    }
                     TextButton(onClick = viewModel::clearFinished) { Text("Clear finished") }
                 },
             )
@@ -85,6 +97,20 @@ fun DownloadManagerScreen(
                 )
             }
         }
+    }
+
+    if (confirmClearQueue) {
+        AlertDialog(
+            onDismissRequest = { confirmClearQueue = false },
+            title = { Text("Clear queue?") },
+            text = { Text("Remove all $pendingCount queued, paused and failed downloads. In-progress downloads are not affected.") },
+            confirmButton = {
+                TextButton(onClick = { viewModel.clearQueued(); confirmClearQueue = false }) { Text("Clear") }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmClearQueue = false }) { Text("Cancel") }
+            },
+        )
     }
 }
 

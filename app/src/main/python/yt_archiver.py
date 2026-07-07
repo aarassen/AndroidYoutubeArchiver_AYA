@@ -267,7 +267,7 @@ def download(url, options_json, out_dir, callback):
             "id": info.get("id"),
         })
     except Exception as e:
-        return json.dumps({"error": _describe_error(e)})
+        return json.dumps({"error": _describe_error(e), "unavailable": _is_permanent_error(e)})
 
 
 def _build_ydl_opts(opts, outtmpl):
@@ -411,15 +411,39 @@ def _as_long(value):
         return None
 
 
+# Substrings that mean "this URL can never succeed on retry" — used to skip the
+# item immediately instead of retrying (which would stall the queue).
+_PERMANENT_ERROR_MARKERS = (
+    "private", "copyright", "removed", "deleted", "unavailable",
+    "not available in your country", "geo", "geo-restricted", "region",
+    "sign in", "age", "confirm your age",
+    "members-only", "members only", "join this channel",
+    "has been terminated", "account associated",
+    "this video is not available", "no longer available",
+    "video is unavailable", "who has blocked it",
+)
+
+
+def _is_permanent_error(e):
+    low = str(e).lower()
+    return any(m in low for m in _PERMANENT_ERROR_MARKERS)
+
+
 def _describe_error(e):
     msg = str(e)
     low = msg.lower()
     if "private" in low:
         return "This video is private."
-    if "copyright" in low or "removed" in low:
+    if "members-only" in low or "members only" in low or "join this channel" in low:
+        return "This video is members-only."
+    if "copyright" in low or "removed" in low or "deleted" in low:
         return "This video is unavailable (removed or copyright)."
-    if "not available in your country" in low or "geo" in low:
+    if "not available in your country" in low or "geo" in low or "region" in low:
         return "This video is region-restricted."
     if "sign in" in low or "age" in low:
         return "This video requires sign-in / age verification."
+    if "terminated" in low:
+        return "This channel/account has been terminated."
+    if "unavailable" in low or "no longer available" in low:
+        return "This video is unavailable."
     return msg or "Unknown error"

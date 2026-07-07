@@ -17,6 +17,9 @@ import javax.inject.Singleton
 @Serializable
 data class DownloadResultDto(
     val error: String? = null,
+    /** True when the engine knows the URL can never succeed (private/removed/
+     *  region/age/members-only) — the worker skips retrying it. */
+    val unavailable: Boolean = false,
     val filePath: String = "",
     val fileSizeBytes: Long = 0,
     val title: String? = null,
@@ -68,7 +71,7 @@ class YtDlpService @Inject constructor(
                 .callAttr("download", url, optionsJson, outputDir, callback)
                 .toString()
             val dto = json.decodeFromString(DownloadResultDto.serializer(), raw)
-            if (dto.error != null) OpResult.Error(dto.error)
+            if (dto.error != null) OpResult.Error(dto.error, permanent = dto.unavailable)
             else OpResult.Success(dto)
         } catch (t: Throwable) {
             OpResult.Error(t.message ?: "Download failed", t)

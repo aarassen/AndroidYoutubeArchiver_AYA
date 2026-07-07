@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.adnanearrassen.ytarchiver.core.common.UrlUtils
 import com.adnanearrassen.ytarchiver.domain.model.AppSettings
+import com.adnanearrassen.ytarchiver.domain.model.ChannelPlaylistPreview
+import com.adnanearrassen.ytarchiver.domain.model.ChannelPreview
 import com.adnanearrassen.ytarchiver.domain.model.DownloadOptions
 import com.adnanearrassen.ytarchiver.domain.model.DownloadType
 import com.adnanearrassen.ytarchiver.domain.model.MediaInfo
@@ -26,6 +28,8 @@ data class DownloadUiState(
     val url: String = "",
     val isAnalyzing: Boolean = false,
     val info: MediaInfo? = null,
+    /** Non-null when the analysed URL is a channel (custom download UI). */
+    val channelPreview: ChannelPreview? = null,
     val error: String? = null,
     val enqueuedMessage: String? = null,
 )
@@ -63,7 +67,11 @@ class DownloadViewModel @Inject constructor(
             _uiState.value = _uiState.value.copy(error = "Paste a YouTube URL first")
             return
         }
-        _uiState.value = _uiState.value.copy(isAnalyzing = true, error = null, info = null)
+        if (UrlUtils.isChannelUrl(url)) {
+            analyzeChannel(url)
+            return
+        }
+        _uiState.value = _uiState.value.copy(isAnalyzing = true, error = null, info = null, channelPreview = null)
         viewModelScope.launch {
             when (val result = analyzer.analyze(url)) {
                 is OpResult.Success ->
@@ -71,6 +79,38 @@ class DownloadViewModel @Inject constructor(
                 is OpResult.Error ->
                     _uiState.value = _uiState.value.copy(isAnalyzing = false, error = result.message)
             }
+        }
+    }
+
+    /** Analyses a channel into its videos tab + published playlists so the UI
+     *  can present a "pick what to download" confirmation screen. */
+    private fun analyzeChannel(channelUrl: String) {
+        val base = UrlUtils.channelBaseUrl(channelUrl)
+        _uiState.value = _uiState.value.copy(isAnalyzing = true, error = null, info = null, channelPreview = null)
+        viewModelScope.launch {
+            val videos = when (val res = analyzer.analyze("$base/videos")) {
+                is OpResult.Success -> res.data
+                is OpResult.Error -> {
+                    _uiState.value = _uiState.value.copy(isAnalyzing = false, error = res.message)
+                    return@launch
+                }
+            }
+            // The playlists tab is best-effort — a channel may publish none.
+            val playlists = when (val res = analyzer.analyze("$base/playlists")) {
+                is OpResult.Success -> res.data.playlist?.entries.orEmpty()
+                    .map { ChannelPlaylistPreview(it.title, it.url, it.thumbnailUrl) }
+                is OpResult.Error -> emptyList()
+            }
+            _uiState.value = _uiState.value.copy(
+                isAnalyzing = false,
+                channelPreview = ChannelPreview(
+                    name = videos.uploader ?: videos.title,
+                    thumbnailUrl = videos.thumbnailUrl,
+                    videoCount = videos.playlist?.itemCount ?: 0,
+                    videos = videos,
+                    playlists = playlists,
+                ),
+            )
         }
     }
 
@@ -115,33 +155,41 @@ class DownloadViewModel @Inject constructor(
         }
     }
 
-    /** Downloads every playlist on a channel's /playlists tab. */
-    fun downloadChannelPlaylists() {
-        val raw = _uiState.value.url.trim()
-        val base = UrlUtils.channelBaseUrl(UrlUtils.firstUrlIn(raw) ?: raw)
+    /**
+     * Downloads the user's chosen parts of a channel: optionally all its videos,
+     * plus each selected playlist (resolved to its entries then enqueued).
+     * [asMusic] downloads audio-only.
+     */
+    fun downloadChannelSelection(
+        includeVideos: Boolean,
+        playlistUrls: List<String>,
+        asMusic: Boolean = false,
+    ) {
+        val preview = _uiState.value.channelPreview ?: return
         _uiState.value = _uiState.value.copy(isAnalyzing = true, error = null)
         viewModelScope.launch {
             val settings = settingsRepository.settings.first()
-            val options = DefaultOptions.video(settings)
-            when (val res = analyzer.analyze("$base/playlists")) {
-                is OpResult.Success -> {
-                    val entries = res.data.playlist?.entries.orEmpty()
-                    var count = 0
-                    for (entry in entries) {
-                        val plRes = analyzer.analyze(entry.url)
-                        if (plRes is OpResult.Success && plRes.data.isPlaylist) {
-                            downloadRepository.enqueuePlaylist(plRes.data, options)
-                            count++
-                        }
-                    }
-                    _uiState.value = _uiState.value.copy(
-                        isAnalyzing = false,
-                        enqueuedMessage = if (count > 0) "Queued $count playlists" else "No playlists found",
-                    )
-                }
-                is OpResult.Error -> _uiState.value =
-                    _uiState.value.copy(isAnalyzing = false, error = res.message)
+            val options: DownloadOptions =
+                if (asMusic) DefaultOptions.music(settings) else DefaultOptions.video(settings)
+            var count = 0
+            if (includeVideos) {
+                preview.videos?.let { downloadRepository.enqueuePlaylist(it, options); count++ }
             }
+            for (url in playlistUrls) {
+                val res = analyzer.analyze(url)
+                if (res is OpResult.Success && res.data.isPlaylist) {
+                    downloadRepository.enqueuePlaylist(res.data, options)
+                    count++
+                }
+            }
+            _uiState.value = _uiState.value.copy(
+                isAnalyzing = false,
+                enqueuedMessage = when {
+                    count == 0 -> "Nothing selected"
+                    count == 1 -> "Queued 1 collection"
+                    else -> "Queued $count collections"
+                },
+            )
         }
     }
 

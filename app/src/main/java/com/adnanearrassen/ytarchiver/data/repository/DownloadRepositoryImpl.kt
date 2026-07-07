@@ -159,4 +159,10 @@ class DownloadRepositoryImpl @Inject constructor(
     override suspend fun clearFinished() = withContext(io) {
         dao.clearFinished()
     }
+
+    override suspend fun clearQueued() = withContext(io) {
+        // Cancel any WorkManager jobs first so they don't resurrect deleted rows.
+        dao.pendingIds().forEach { scheduler.cancelWork(it) }
+        dao.clearQueued()
+    }
 }

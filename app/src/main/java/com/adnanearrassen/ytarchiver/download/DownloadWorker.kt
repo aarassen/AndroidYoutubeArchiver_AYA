@@ -127,21 +127,26 @@ class DownloadWorker @AssistedInject constructor(
             }
             is OpResult.Error -> {
                 Log.e(TAG, "Download failed for ${entity.sourceUrl}: ${outcome.message}")
-                // Permanent failures (private/removed/region/age) can never
-                // succeed on retry — mark failed immediately so the queue moves on.
-                val permanent = isPermanentFailure(outcome.message)
+                // Permanent failures (private/removed/region/age/members-only)
+                // can never succeed on retry — mark failed immediately so the
+                // queue skips them instead of stalling on the hidden video.
+                val permanent = outcome.permanent || isPermanentFailure(outcome.message)
                 if (!permanent && settings.autoRetryFailed && entity.retryCount < settings.maxRetries) {
+                    // Requeue at the BACK of the queue (not Result.retry(), which
+                    // re-runs THIS worker and lets a failing item monopolise the
+                    // single slot). Other queued items get a turn first.
                     downloadDao.update(
                         entity.copy(
                             status = DownloadStatus.QUEUED,
                             retryCount = entity.retryCount + 1,
                             errorMessage = outcome.message,
+                            queuePosition = downloadDao.maxQueuePosition() + 1,
                         )
                     )
-                    Result.retry()
+                    Result.success()
                 } else {
                     markFailed(entity, outcome.message)
-                    Result.failure()
+                    Result.success()
                 }
             }
         }
@@ -231,7 +236,8 @@ class DownloadWorker @AssistedInject constructor(
         return listOf(
             "private", "unavailable", "removed", "deleted", "copyright",
             "region", "not available in your country", "sign in", "age",
-            "members-only", "members only",
+            "members-only", "members only", "join this channel",
+            "terminated", "no longer available", "confirm your age",
         ).any { m.contains(it) }
     }
 

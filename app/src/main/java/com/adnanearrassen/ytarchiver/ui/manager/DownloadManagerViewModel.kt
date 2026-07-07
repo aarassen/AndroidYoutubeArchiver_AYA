@@ -26,4 +26,5 @@ class DownloadManagerViewModel @Inject constructor(
     fun moveUp(id: Long) = viewModelScope.launch { downloadRepository.moveUp(id) }
     fun moveDown(id: Long) = viewModelScope.launch { downloadRepository.moveDown(id) }
     fun clearFinished() = viewModelScope.launch { downloadRepository.clearFinished() }
+    fun clearQueued() = viewModelScope.launch { downloadRepository.clearQueued() }
 }

@@ -21,7 +21,12 @@ sealed interface UpdateState {
 /** Generic wrapper for operations that can fail (analysis, updates, etc.). */
 sealed interface OpResult<out T> {
     data class Success<T>(val data: T) : OpResult<T>
-    data class Error(val message: String, val cause: Throwable? = null) : OpResult<Nothing>
+    data class Error(
+        val message: String,
+        val cause: Throwable? = null,
+        /** True when the failure is permanent (retrying can never succeed). */
+        val permanent: Boolean = false,
+    ) : OpResult<Nothing>
 }
 
 inline fun <T> OpResult<T>.onSuccess(block: (T) -> Unit): OpResult<T> {
