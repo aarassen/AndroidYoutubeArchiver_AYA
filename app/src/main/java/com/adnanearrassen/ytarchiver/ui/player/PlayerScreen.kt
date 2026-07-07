@@ -37,6 +37,8 @@ import androidx.compose.material.icons.filled.Forward10
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Replay10
+import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -82,6 +84,9 @@ fun PlayerScreen(
 ) {
     val media by viewModel.media.collectAsStateWithLifecycle()
     val hasSubtitles by viewModel.hasSubtitles.collectAsStateWithLifecycle()
+    val isPlaylist by viewModel.isPlaylist.collectAsStateWithLifecycle()
+    val hasNext by viewModel.hasNext.collectAsStateWithLifecycle()
+    val hasPrevious by viewModel.hasPrevious.collectAsStateWithLifecycle()
     var subtitlesEnabled by remember { mutableStateOf(false) }
     val player = viewModel.player
     val context = LocalContext.current
@@ -111,10 +116,10 @@ fun PlayerScreen(
     }
     var indicatorVisible by remember { mutableStateOf(false) }
 
-    // Enter immersive fullscreen landscape; restore everything on exit.
+    // Enter immersive fullscreen landscape; the rest of the app is portrait-locked
+    // (see the manifest), so on exit we explicitly restore portrait.
     DisposableEffect(Unit) {
         val window = activity?.window
-        val originalOrientation = activity?.requestedOrientation
         activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
         window?.let {
             val controller = WindowCompat.getInsetsController(it, it.decorView)
@@ -123,7 +128,7 @@ fun PlayerScreen(
                 WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         }
         onDispose {
-            activity?.requestedOrientation = originalOrientation ?: ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
             window?.let {
                 WindowCompat.getInsetsController(it, it.decorView)
                     .show(WindowInsetsCompat.Type.systemBars())
@@ -274,6 +279,11 @@ fun PlayerScreen(
                 showSubtitleButton = hasSubtitles,
                 subtitlesEnabled = subtitlesEnabled,
                 onToggleSubtitles = { subtitlesEnabled = !subtitlesEnabled },
+                showNextPrev = isPlaylist,
+                hasNext = hasNext,
+                hasPrevious = hasPrevious,
+                onNext = { viewModel.playNext() },
+                onPrevious = { viewModel.playPrevious() },
                 onClose = onBack,
                 onPlayPause = {
                     if (player.isPlaying) player.pause() else player.play()
@@ -300,6 +310,11 @@ private fun PlayerControls(
     showSubtitleButton: Boolean,
     subtitlesEnabled: Boolean,
     onToggleSubtitles: () -> Unit,
+    showNextPrev: Boolean,
+    hasNext: Boolean,
+    hasPrevious: Boolean,
+    onNext: () -> Unit,
+    onPrevious: () -> Unit,
     onClose: () -> Unit,
     onPlayPause: () -> Unit,
     onRewind: () -> Unit,
@@ -346,11 +361,20 @@ private fun PlayerControls(
         // Center transport: rewind / play-pause / forward.
         Row(
             modifier = Modifier.align(Alignment.Center),
-            horizontalArrangement = Arrangement.spacedBy(28.dp),
+            horizontalArrangement = Arrangement.spacedBy(20.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            if (showNextPrev) {
+                IconButton(onClick = onPrevious, enabled = hasPrevious, modifier = Modifier.size(48.dp)) {
+                    Icon(
+                        Icons.Filled.SkipPrevious, "Previous",
+                        tint = if (hasPrevious) Color.White else Color.White.copy(alpha = 0.35f),
+                        modifier = Modifier.size(38.dp),
+                    )
+                }
+            }
             IconButton(onClick = onRewind, modifier = Modifier.size(52.dp)) {
-                Icon(Icons.Filled.Replay10, "Rewind 10s", tint = Color.White, modifier = Modifier.size(40.dp))
+                Icon(Icons.Filled.Replay10, "Rewind 10s", tint = Color.White, modifier = Modifier.size(38.dp))
             }
             IconButton(onClick = onPlayPause, modifier = Modifier.size(72.dp)) {
                 Icon(
@@ -361,7 +385,16 @@ private fun PlayerControls(
                 )
             }
             IconButton(onClick = onForward, modifier = Modifier.size(52.dp)) {
-                Icon(Icons.Filled.Forward10, "Forward 10s", tint = Color.White, modifier = Modifier.size(40.dp))
+                Icon(Icons.Filled.Forward10, "Forward 10s", tint = Color.White, modifier = Modifier.size(38.dp))
+            }
+            if (showNextPrev) {
+                IconButton(onClick = onNext, enabled = hasNext, modifier = Modifier.size(48.dp)) {
+                    Icon(
+                        Icons.Filled.SkipNext, "Next",
+                        tint = if (hasNext) Color.White else Color.White.copy(alpha = 0.35f),
+                        modifier = Modifier.size(38.dp),
+                    )
+                }
             }
         }
 

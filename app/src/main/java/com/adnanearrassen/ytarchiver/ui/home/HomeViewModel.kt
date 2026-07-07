@@ -3,6 +3,7 @@ package com.adnanearrassen.ytarchiver.ui.home
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.adnanearrassen.ytarchiver.domain.model.ArchivedMedia
+import com.adnanearrassen.ytarchiver.domain.model.ContinueItem
 import com.adnanearrassen.ytarchiver.domain.model.MediaKind
 import com.adnanearrassen.ytarchiver.domain.model.Playlist
 import com.adnanearrassen.ytarchiver.domain.repository.LibraryRepository
@@ -53,9 +54,9 @@ class HomeViewModel @Inject constructor(
     private val _sort = MutableStateFlow(SortOrder.RECENT)
     val sort: StateFlow<SortOrder> = _sort.asStateFlow()
 
-    /** Horizontal "Continue watching" shelf shown above the feed. */
-    val continueWatching: StateFlow<List<ArchivedMedia>> =
-        libraryRepository.observeContinueWatching(10)
+    /** "Continue watching" shelf: standalone videos + playlists-in-progress. */
+    val continueWatching: StateFlow<List<ContinueItem>> =
+        libraryRepository.observeContinueItems(12)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /** Downloaded playlists, shown as their own cards (not scattered videos). */
@@ -87,6 +88,14 @@ class HomeViewModel @Inject constructor(
 
     fun delete(id: Long) = viewModelScope.launch {
         libraryRepository.delete(id, deleteFile = true)
+    }
+
+    fun removeContinueVideo(id: Long) = viewModelScope.launch {
+        libraryRepository.clearWatchProgress(id)
+    }
+
+    fun removeContinuePlaylist(playlistId: Long) = viewModelScope.launch {
+        libraryRepository.clearPlaylistWatchProgress(playlistId)
     }
 
     fun togglePlaylistFavorite(id: Long) = viewModelScope.launch {

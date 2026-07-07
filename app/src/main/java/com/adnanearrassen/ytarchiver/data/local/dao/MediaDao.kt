@@ -1,6 +1,7 @@
 package com.adnanearrassen.ytarchiver.data.local.dao
 
 import androidx.room.Dao
+import androidx.room.Embedded
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
@@ -8,6 +9,12 @@ import androidx.room.Update
 import com.adnanearrassen.ytarchiver.data.local.entity.ArchivedMediaEntity
 import com.adnanearrassen.ytarchiver.domain.model.MediaKind
 import kotlinx.coroutines.flow.Flow
+
+/** An in-progress media row plus the playlist it belongs to (if any). */
+data class InProgressRow(
+    @Embedded val media: ArchivedMediaEntity,
+    val playlistId: Long?,
+)
 
 @Dao
 interface MediaDao {
@@ -49,6 +56,24 @@ interface MediaDao {
            ORDER BY lastWatchedAt DESC LIMIT :limit"""
     )
     fun observeContinueWatching(limit: Int): Flow<List<ArchivedMediaEntity>>
+
+    /** In-progress items with their playlist id (null = standalone), newest first. */
+    @Query(
+        """SELECT m.*, (SELECT pi.playlistId FROM playlist_items pi WHERE pi.mediaId = m.id LIMIT 1) AS playlistId
+           FROM archived_media m
+           WHERE m.playbackPositionMs > 0 AND m.lastWatchedAt IS NOT NULL
+           ORDER BY m.lastWatchedAt DESC LIMIT :limit"""
+    )
+    fun observeInProgress(limit: Int): Flow<List<InProgressRow>>
+
+    @Query("UPDATE archived_media SET playbackPositionMs = 0, lastWatchedAt = NULL WHERE id = :id")
+    suspend fun clearProgress(id: Long)
+
+    @Query(
+        """UPDATE archived_media SET playbackPositionMs = 0, lastWatchedAt = NULL
+           WHERE id IN (SELECT mediaId FROM playlist_items WHERE playlistId = :playlistId)"""
+    )
+    suspend fun clearPlaylistProgress(playlistId: Long)
 
     @Query("SELECT * FROM archived_media WHERE isFavorite = 1 ORDER BY addedAt DESC")
     fun observeFavorites(): Flow<List<ArchivedMediaEntity>>

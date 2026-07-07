@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.adnanearrassen.ytarchiver.domain.model.ArchivedMedia
+import com.adnanearrassen.ytarchiver.domain.model.ContinueItem
 import com.adnanearrassen.ytarchiver.domain.model.MediaKind
 import com.adnanearrassen.ytarchiver.domain.model.Playlist
 import com.adnanearrassen.ytarchiver.ui.components.CompactVideoCard
@@ -55,6 +56,7 @@ import com.adnanearrassen.ytarchiver.ui.components.VideoCard
 fun HomeScreen(
     onOpenMedia: (Long) -> Unit,
     onOpenPlaylist: (Long) -> Unit,
+    onPlayInPlaylist: (playlistId: Long, mediaId: Long) -> Unit,
     onQuickDownload: () -> Unit,
     onSeeStorage: () -> Unit,
     viewModel: HomeViewModel = hiltViewModel(),
@@ -138,8 +140,28 @@ fun HomeScreen(
                         contentPadding = PaddingValues(horizontal = 12.dp),
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                        items(continueWatching, key = { "cw-${it.id}" }) { media ->
-                            CompactVideoCard(media = media, onClick = { openMedia(media.id) })
+                        items(
+                            continueWatching,
+                            key = { entry ->
+                                when (entry) {
+                                    is ContinueItem.Video -> "cwv-${entry.media.id}"
+                                    is ContinueItem.Playlist -> "cwp-${entry.playlist.id}"
+                                }
+                            },
+                        ) { entry ->
+                            when (entry) {
+                                is ContinueItem.Video -> CompactVideoCard(
+                                    media = entry.media,
+                                    onClick = { openMedia(entry.media.id) },
+                                    onRemove = { viewModel.removeContinueVideo(entry.media.id) },
+                                )
+                                is ContinueItem.Playlist -> CompactVideoCard(
+                                    media = entry.resumeMedia,
+                                    playlistBadge = true,
+                                    onClick = { onPlayInPlaylist(entry.playlist.id, entry.resumeMedia.id) },
+                                    onRemove = { viewModel.removeContinuePlaylist(entry.playlist.id) },
+                                )
+                            }
                         }
                     }
                     Spacer(Modifier.height(8.dp))

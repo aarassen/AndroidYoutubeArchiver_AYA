@@ -1,5 +1,6 @@
 package com.adnanearrassen.ytarchiver.ui.components
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,6 +14,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.PlaylistPlay
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
@@ -32,6 +35,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -120,18 +124,44 @@ fun CompactVideoCard(
     media: ArchivedMedia,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    onRemove: (() -> Unit)? = null,
+    playlistBadge: Boolean = false,
 ) {
     Column(
         modifier = modifier
             .width(240.dp)
             .clickable(onClick = onClick),
     ) {
-        Thumbnail(
-            url = media.thumbnailPath ?: media.filePath,
-            durationSeconds = media.durationSeconds,
-            watchProgress = media.watchProgress,
-            modifier = Modifier.fillMaxWidth(),
-        )
+        Box {
+            Thumbnail(
+                url = media.thumbnailPath ?: media.filePath,
+                durationSeconds = media.durationSeconds,
+                watchProgress = media.watchProgress,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            if (playlistBadge) {
+                Surface(
+                    color = Color.Black.copy(alpha = 0.78f),
+                    shape = RoundedCornerShape(topStart = 12.dp, bottomEnd = 10.dp),
+                    modifier = Modifier.align(Alignment.TopStart),
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                    ) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.PlaylistPlay,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(15.dp),
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text("Playlist", color = Color.White, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+            if (onRemove != null) RemoveBadge(onRemove, Modifier.align(Alignment.TopEnd))
+        }
         Spacer(Modifier.height(6.dp))
         Text(
             text = media.title,
@@ -207,6 +237,26 @@ fun MusicRow(
         if (onDelete != null || onToggleFavorite != null) {
             MediaOverflowMenu(media.isFavorite, onToggleFavorite, onDelete)
         }
+    }
+}
+
+/** A small circular ✕ badge, e.g. to remove a card from "Continue watching". */
+@Composable
+fun RemoveBadge(onRemove: () -> Unit, modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .padding(6.dp)
+            .size(28.dp)
+            .background(Color.Black.copy(alpha = 0.6f), CircleShape)
+            .clickable(onClick = onRemove),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            Icons.Filled.Close,
+            contentDescription = "Remove",
+            tint = Color.White,
+            modifier = Modifier.size(18.dp),
+        )
     }
 }
 

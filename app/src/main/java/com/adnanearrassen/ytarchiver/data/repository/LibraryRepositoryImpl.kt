@@ -10,6 +10,7 @@ import com.adnanearrassen.ytarchiver.data.local.entity.PlaylistItemCrossRef
 import com.adnanearrassen.ytarchiver.data.mapper.toDomain
 import com.adnanearrassen.ytarchiver.data.mapper.toHistoryRecord
 import com.adnanearrassen.ytarchiver.domain.model.ArchivedMedia
+import com.adnanearrassen.ytarchiver.domain.model.ContinueItem
 import com.adnanearrassen.ytarchiver.domain.model.DownloadHistoryRecord
 import com.adnanearrassen.ytarchiver.domain.model.MediaKind
 import com.adnanearrassen.ytarchiver.domain.model.Playlist
@@ -18,6 +19,7 @@ import com.adnanearrassen.ytarchiver.domain.repository.LibraryRepository
 import com.adnanearrassen.ytarchiver.storage.StorageLocator
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
@@ -66,6 +68,35 @@ class LibraryRepositoryImpl @Inject constructor(
 
     override fun observeContinueWatching(limit: Int): Flow<List<ArchivedMedia>> =
         mediaDao.observeContinueWatching(limit).map { it.map { e -> e.toDomain() } }.flowOn(io)
+
+    override fun observeContinueItems(limit: Int): Flow<List<ContinueItem>> =
+        combine(
+            mediaDao.observeInProgress(limit * 3),
+            playlistDao.observePlaylistsWithStats(),
+        ) { rows, playlists ->
+            val seenPlaylists = HashSet<Long>()
+            val out = ArrayList<ContinueItem>()
+            for (row in rows) {
+                val plId = row.playlistId
+                if (plId == null) {
+                    out.add(ContinueItem.Video(row.media.toDomain()))
+                } else if (seenPlaylists.add(plId)) {
+                    playlists.firstOrNull { it.id == plId }?.let { pl ->
+                        out.add(ContinueItem.Playlist(pl.toDomain(), row.media.toDomain()))
+                    }
+                }
+                if (out.size >= limit) break
+            }
+            out
+        }.flowOn(io)
+
+    override suspend fun clearWatchProgress(id: Long) = withContext(io) {
+        mediaDao.clearProgress(id)
+    }
+
+    override suspend fun clearPlaylistWatchProgress(playlistId: Long) = withContext(io) {
+        mediaDao.clearPlaylistProgress(playlistId)
+    }
 
     override fun observeFavorites(): Flow<List<ArchivedMedia>> =
         mediaDao.observeFavorites().map { it.map { e -> e.toDomain() } }.flowOn(io)

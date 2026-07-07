@@ -2,6 +2,7 @@ package com.adnanearrassen.ytarchiver.domain.repository
 
 import com.adnanearrassen.ytarchiver.domain.model.AppSettings
 import com.adnanearrassen.ytarchiver.domain.model.ArchivedMedia
+import com.adnanearrassen.ytarchiver.domain.model.ContinueItem
 import com.adnanearrassen.ytarchiver.domain.model.DownloadHistoryRecord
 import com.adnanearrassen.ytarchiver.domain.model.DownloadItem
 import com.adnanearrassen.ytarchiver.domain.model.DownloadOptions
@@ -65,6 +66,11 @@ interface LibraryRepository {
 
     fun observeRecentlyAdded(limit: Int): Flow<List<ArchivedMedia>>
     fun observeContinueWatching(limit: Int): Flow<List<ArchivedMedia>>
+
+    /** Continue-watching entries: standalone videos + playlists-in-progress. */
+    fun observeContinueItems(limit: Int): Flow<List<ContinueItem>>
+    suspend fun clearWatchProgress(id: Long)
+    suspend fun clearPlaylistWatchProgress(playlistId: Long)
     fun observeFavorites(): Flow<List<ArchivedMedia>>
     fun observeDownloadedToday(): Flow<List<ArchivedMedia>>
     fun search(query: String): Flow<List<ArchivedMedia>>

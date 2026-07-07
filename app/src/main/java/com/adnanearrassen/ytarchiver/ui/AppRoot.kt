@@ -92,6 +92,9 @@ fun AppRoot(
                 HomeScreen(
                     onOpenMedia = { navController.navigate(Routes.player(it)) },
                     onOpenPlaylist = { navController.navigate(Routes.playlist(it)) },
+                    onPlayInPlaylist = { playlistId, mediaId ->
+                        navController.navigate(Routes.player(mediaId, playlistId))
+                    },
                     onQuickDownload = { switchTab(TopLevelDestination.DOWNLOAD.route) },
                     onSeeStorage = { navController.navigate(Routes.STORAGE) },
                 )

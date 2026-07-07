@@ -48,6 +48,14 @@ class PlayerViewModel @Inject constructor(
     private val _hasSubtitles = MutableStateFlow(false)
     val hasSubtitles: StateFlow<Boolean> = _hasSubtitles.asStateFlow()
 
+    /** Playlist navigation state (multiple items in the queue). */
+    private val _isPlaylist = MutableStateFlow(false)
+    val isPlaylist: StateFlow<Boolean> = _isPlaylist.asStateFlow()
+    private val _hasNext = MutableStateFlow(false)
+    val hasNext: StateFlow<Boolean> = _hasNext.asStateFlow()
+    private val _hasPrevious = MutableStateFlow(false)
+    val hasPrevious: StateFlow<Boolean> = _hasPrevious.asStateFlow()
+
     /** The playback queue (a single item, or all items of a playlist in order). */
     private var queue: List<ArchivedMedia> = emptyList()
     private var trackedIndex = 0
@@ -67,12 +75,21 @@ class PlayerViewModel @Inject constructor(
                 _media.value = item
                 _hasSubtitles.value = subtitleFiles(item.filePath).isNotEmpty()
             }
+            updateNavState()
         }
 
         override fun onIsPlayingChanged(isPlaying: Boolean) {
             if (!isPlaying) persistCurrentPosition()
         }
     }
+
+    private fun updateNavState() {
+        _hasNext.value = player.hasNextMediaItem()
+        _hasPrevious.value = player.hasPreviousMediaItem()
+    }
+
+    fun playNext() = player.seekToNextMediaItem()
+    fun playPrevious() = player.seekToPreviousMediaItem()
 
     init {
         viewModelScope.launch {
@@ -92,6 +109,8 @@ class PlayerViewModel @Inject constructor(
 
             _media.value = startItem
             _hasSubtitles.value = subtitleFiles(startItem.filePath).isNotEmpty()
+            _isPlaylist.value = queue.size > 1
+            updateNavState()
             player.addListener(listener)
         }
 
