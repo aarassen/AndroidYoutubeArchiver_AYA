@@ -40,7 +40,7 @@ class WebServerService : Service() {
     }
 
     private fun buildNotification(): Notification {
-        val url = manager.state.value.url ?: ""
+        val url = manager.state.value.primaryUrl ?: ""
         val stopIntent = PendingIntent.getService(
             this, 0,
             Intent(this, WebServerService::class.java).setAction(ACTION_STOP),

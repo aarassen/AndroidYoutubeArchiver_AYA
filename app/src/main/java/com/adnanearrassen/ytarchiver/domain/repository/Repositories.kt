@@ -2,6 +2,7 @@ package com.adnanearrassen.ytarchiver.domain.repository
 
 import com.adnanearrassen.ytarchiver.domain.model.AppSettings
 import com.adnanearrassen.ytarchiver.domain.model.ArchivedMedia
+import com.adnanearrassen.ytarchiver.domain.model.Channel
 import com.adnanearrassen.ytarchiver.domain.model.ContinueItem
 import com.adnanearrassen.ytarchiver.domain.model.DownloadHistoryRecord
 import com.adnanearrassen.ytarchiver.domain.model.DownloadItem
@@ -57,6 +58,11 @@ interface LibraryRepository {
     /** Media that is NOT part of any playlist (for the main feed). */
     fun observeStandalone(): Flow<List<ArchivedMedia>>
     fun observeStandaloneByKind(kind: MediaKind): Flow<List<ArchivedMedia>>
+
+    /** Channels (uploaders) grouping. */
+    fun observeChannels(): Flow<List<Channel>>
+    fun observeByChannel(name: String): Flow<List<ArchivedMedia>>
+    suspend fun deleteChannel(name: String)
 
     /** A single playlist and its items (ordered by playlist index). */
     fun observePlaylist(playlistId: Long): Flow<Playlist?>

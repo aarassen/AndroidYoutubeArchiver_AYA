@@ -5,10 +5,13 @@ import android.util.Log
 import com.adnanearrassen.ytarchiver.core.common.ApplicationScope
 import com.adnanearrassen.ytarchiver.data.local.dao.MediaDao
 import com.adnanearrassen.ytarchiver.data.local.dao.PlaylistDao
+import android.util.Base64
+import com.adnanearrassen.ytarchiver.domain.model.ContinueItem
 import com.adnanearrassen.ytarchiver.domain.model.DownloadOptions
 import com.adnanearrassen.ytarchiver.domain.model.MediaKind
 import com.adnanearrassen.ytarchiver.domain.model.OpResult
 import com.adnanearrassen.ytarchiver.domain.repository.DownloadRepository
+import com.adnanearrassen.ytarchiver.domain.repository.LibraryRepository
 import com.adnanearrassen.ytarchiver.domain.repository.MediaAnalyzer
 import com.adnanearrassen.ytarchiver.domain.repository.SettingsRepository
 import com.adnanearrassen.ytarchiver.domain.usecase.DefaultOptions
@@ -38,6 +41,7 @@ class MediaWebServer(
     private val mediaDao: MediaDao,
     private val playlistDao: PlaylistDao,
     private val downloadRepository: DownloadRepository,
+    private val libraryRepository: LibraryRepository,
     private val analyzer: MediaAnalyzer,
     private val settingsRepository: SettingsRepository,
     @ApplicationScope private val appScope: CoroutineScope,
@@ -45,15 +49,18 @@ class MediaWebServer(
 
     override fun serve(session: IHTTPSession): Response {
         return try {
+            if (!isAuthorized(session)) return unauthorized()
             val uri = session.uri
             when {
                 uri == "/" || uri == "/index.html" -> asset("web/index.html", "text/html")
                 uri == "/app.js" -> asset("web/app.js", "application/javascript")
                 uri == "/style.css" -> asset("web/style.css", "text/css")
                 uri == "/api/library" -> json(libraryJson())
+                uri == "/api/continue" -> json(continueJson())
                 uri == "/api/playlists" -> json(playlistsJson())
                 uri == "/api/queue" -> json(queueJson())
                 uri == "/api/download" -> handleDownload(session)
+                uri == "/api/progress/clear" -> handleClearProgress(session)
                 uri.startsWith("/media/") -> streamMedia(uri.removePrefix("/media/"), session)
                 uri.startsWith("/thumb/") -> streamThumb(uri.removePrefix("/thumb/"))
                 else -> newFixedLengthResponse(Response.Status.NOT_FOUND, "text/plain", "Not found")
@@ -62,6 +69,26 @@ class MediaWebServer(
             Log.e(TAG, "serve error", t)
             newFixedLengthResponse(Response.Status.INTERNAL_ERROR, "text/plain", t.message ?: "error")
         }
+    }
+
+    // --- Auth --------------------------------------------------------------
+
+    private fun isAuthorized(session: IHTTPSession): Boolean {
+        val password = runBlocking { settingsRepository.settings.first().webServerPassword }
+        if (password.isBlank()) return true
+        val header = session.headers["authorization"] ?: return false
+        if (!header.startsWith("Basic ", ignoreCase = true)) return false
+        val decoded = runCatching {
+            String(Base64.decode(header.substring(6).trim(), Base64.DEFAULT))
+        }.getOrNull() ?: return false
+        // "username:password" — any username, the password must match.
+        return decoded.substringAfter(':', "") == password
+    }
+
+    private fun unauthorized(): Response {
+        val res = newFixedLengthResponse(Response.Status.UNAUTHORIZED, "text/plain", "Authentication required")
+        res.addHeader("WWW-Authenticate", "Basic realm=\"YT Archiver\"")
+        return res
     }
 
     // --- API payloads ------------------------------------------------------
@@ -77,8 +104,44 @@ class MediaWebServer(
                     put("kind", m.kind.name)
                     put("durationSeconds", m.durationSeconds)
                     put("sizeBytes", m.fileSizeBytes)
+                    put("positionMs", m.playbackPositionMs)
                     put("hasThumb", m.thumbnailPath != null)
                 })
+            }
+        }
+        return arr.toString()
+    }
+
+    private fun continueJson(): String {
+        val items = runBlocking { libraryRepository.observeContinueItems(20).first() }
+        val arr = buildJsonArray {
+            items.forEach { entry ->
+                when (entry) {
+                    is ContinueItem.Video -> add(buildJsonObject {
+                        put("type", "video")
+                        put("id", entry.media.id)
+                        put("title", entry.media.title)
+                        put("uploader", entry.media.uploader ?: "")
+                        put("kind", entry.media.kind.name)
+                        put("durationSeconds", entry.media.durationSeconds)
+                        put("positionMs", entry.media.playbackPositionMs)
+                        put("progress", entry.media.watchProgress)
+                        put("hasThumb", entry.media.thumbnailPath != null)
+                    })
+                    is ContinueItem.Playlist -> add(buildJsonObject {
+                        put("type", "playlist")
+                        put("playlistId", entry.playlist.id)
+                        put("playlistName", entry.playlist.name)
+                        put("id", entry.resumeMedia.id)
+                        put("title", entry.resumeMedia.title)
+                        put("uploader", entry.resumeMedia.uploader ?: "")
+                        put("kind", entry.resumeMedia.kind.name)
+                        put("durationSeconds", entry.resumeMedia.durationSeconds)
+                        put("positionMs", entry.resumeMedia.playbackPositionMs)
+                        put("progress", entry.resumeMedia.watchProgress)
+                        put("hasThumb", entry.resumeMedia.thumbnailPath != null)
+                    })
+                }
             }
         }
         return arr.toString()
@@ -105,6 +168,7 @@ class MediaWebServer(
                                 put("uploader", m.uploader ?: "")
                                 put("kind", m.kind.name)
                                 put("durationSeconds", m.durationSeconds)
+                                put("positionMs", m.playbackPositionMs)
                                 put("hasThumb", m.thumbnailPath != null)
                             })
                         }
@@ -158,6 +222,19 @@ class MediaWebServer(
             }
         }
         return json("""{"ok":true,"status":"queued"}""")
+    }
+
+    private fun handleClearProgress(session: IHTTPSession): Response {
+        runCatching { session.parseBody(HashMap()) }
+        val id = session.parameters["id"]?.firstOrNull()?.toLongOrNull()
+        val playlistId = session.parameters["playlistId"]?.firstOrNull()?.toLongOrNull()
+        appScope.launch {
+            runCatching {
+                if (playlistId != null) libraryRepository.clearPlaylistWatchProgress(playlistId)
+                else if (id != null) libraryRepository.clearWatchProgress(id)
+            }
+        }
+        return json("""{"ok":true}""")
     }
 
     // --- File streaming ----------------------------------------------------

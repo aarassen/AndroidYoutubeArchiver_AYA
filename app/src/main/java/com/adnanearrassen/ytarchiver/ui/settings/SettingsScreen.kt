@@ -15,6 +15,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -151,18 +152,44 @@ fun SettingsScreen(
                 SwitchRow(
                     title = "Run web server",
                     checked = webServer.running,
-                    subtitle = webServer.url
-                        ?: "Browse, play and control downloads from any browser on your Wi-Fi",
+                    subtitle = "Browse, play and control downloads from any browser on your Wi-Fi",
                 ) { viewModel.toggleWebServer() }
             }
-            if (webServer.running && webServer.url != null) {
+            if (webServer.running) {
                 item {
-                    Text(
-                        "Open ${webServer.url} in a browser on the same network.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(vertical = 4.dp),
-                    )
+                    Column(Modifier.padding(vertical = 4.dp)) {
+                        webServer.httpsUrl?.let {
+                            Text("HTTPS: $it", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
+                        }
+                        webServer.httpUrl?.let {
+                            Text("HTTP: $it", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
+                        }
+                    }
+                }
+            }
+            item {
+                OutlinedTextField(
+                    value = settings.webServerPassword,
+                    onValueChange = { v -> viewModel.update { it.copy(webServerPassword = v) } },
+                    label = { Text("Password (blank = no password)") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                )
+            }
+            item {
+                SwitchRow(
+                    title = "Enable HTTPS",
+                    checked = settings.webServerHttpsEnabled,
+                    subtitle = "Secure with a self-signed certificate (browser will warn once)",
+                ) { v -> viewModel.update { it.copy(webServerHttpsEnabled = v) } }
+            }
+            if (settings.webServerHttpsEnabled) {
+                item {
+                    SwitchRow(
+                        title = "HTTPS only",
+                        checked = settings.webServerHttpsOnly,
+                        subtitle = "Disable plain HTTP; force secure access",
+                    ) { v -> viewModel.update { it.copy(webServerHttpsOnly = v) } }
                 }
             }
 

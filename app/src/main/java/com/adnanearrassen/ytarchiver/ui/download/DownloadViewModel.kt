@@ -115,6 +115,36 @@ class DownloadViewModel @Inject constructor(
         }
     }
 
+    /** Downloads every playlist on a channel's /playlists tab. */
+    fun downloadChannelPlaylists() {
+        val raw = _uiState.value.url.trim()
+        val base = UrlUtils.channelBaseUrl(UrlUtils.firstUrlIn(raw) ?: raw)
+        _uiState.value = _uiState.value.copy(isAnalyzing = true, error = null)
+        viewModelScope.launch {
+            val settings = settingsRepository.settings.first()
+            val options = DefaultOptions.video(settings)
+            when (val res = analyzer.analyze("$base/playlists")) {
+                is OpResult.Success -> {
+                    val entries = res.data.playlist?.entries.orEmpty()
+                    var count = 0
+                    for (entry in entries) {
+                        val plRes = analyzer.analyze(entry.url)
+                        if (plRes is OpResult.Success && plRes.data.isPlaylist) {
+                            downloadRepository.enqueuePlaylist(plRes.data, options)
+                            count++
+                        }
+                    }
+                    _uiState.value = _uiState.value.copy(
+                        isAnalyzing = false,
+                        enqueuedMessage = if (count > 0) "Queued $count playlists" else "No playlists found",
+                    )
+                }
+                is OpResult.Error -> _uiState.value =
+                    _uiState.value.copy(isAnalyzing = false, error = res.message)
+            }
+        }
+    }
+
     fun consumeMessage() {
         _uiState.value = _uiState.value.copy(enqueuedMessage = null)
     }

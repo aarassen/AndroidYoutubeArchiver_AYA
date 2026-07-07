@@ -21,4 +21,19 @@ object UrlUtils {
 
     fun isPlaylistUrl(url: String): Boolean =
         url.contains("list=", ignoreCase = true) || url.contains("/playlist", ignoreCase = true)
+
+    /** True for a channel URL (/@handle, /channel/ID, /c/name, /user/name). */
+    fun isChannelUrl(url: String): Boolean {
+        val u = url.lowercase()
+        return !isPlaylistUrl(url) && (
+            u.contains("/@") || u.contains("/channel/") || u.contains("/c/") || u.contains("/user/")
+            )
+    }
+
+    /** Strips a channel tab suffix (/videos, /playlists, /streams, /shorts). */
+    fun channelBaseUrl(url: String): String =
+        url.trimEnd('/')
+            .removeSuffix("/videos").removeSuffix("/playlists")
+            .removeSuffix("/streams").removeSuffix("/shorts")
+            .removeSuffix("/featured")
 }

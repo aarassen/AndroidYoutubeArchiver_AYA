@@ -16,6 +16,12 @@ data class InProgressRow(
     val playlistId: Long?,
 )
 
+/** A channel/uploader with its item count. */
+data class ChannelRow(
+    val uploader: String,
+    val count: Int,
+)
+
 @Dao
 interface MediaDao {
 
@@ -91,6 +97,23 @@ interface MediaDao {
 
     @Query("SELECT * FROM archived_media WHERE id = :id")
     suspend fun getById(id: Long): ArchivedMediaEntity?
+
+    @Query("SELECT * FROM archived_media WHERE sourceUrl = :url LIMIT 1")
+    suspend fun findBySourceUrl(url: String): ArchivedMediaEntity?
+
+    // --- Channels (grouped by uploader) ---
+    @Query(
+        """SELECT uploader AS uploader, COUNT(*) AS count FROM archived_media
+           WHERE uploader IS NOT NULL AND uploader != ''
+           GROUP BY uploader ORDER BY uploader COLLATE NOCASE"""
+    )
+    fun observeChannels(): Flow<List<ChannelRow>>
+
+    @Query("SELECT * FROM archived_media WHERE uploader = :name ORDER BY addedAt DESC")
+    fun observeByChannel(name: String): Flow<List<ArchivedMediaEntity>>
+
+    @Query("SELECT * FROM archived_media WHERE uploader = :name")
+    suspend fun getByChannelOnce(name: String): List<ArchivedMediaEntity>
 
     @Query("UPDATE archived_media SET isFavorite = NOT isFavorite WHERE id = :id")
     suspend fun toggleFavorite(id: Long)

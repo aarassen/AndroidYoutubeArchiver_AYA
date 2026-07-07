@@ -3,6 +3,7 @@ package com.adnanearrassen.ytarchiver.ui.library
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.adnanearrassen.ytarchiver.domain.model.ArchivedMedia
+import com.adnanearrassen.ytarchiver.domain.model.Channel
 import com.adnanearrassen.ytarchiver.domain.model.MediaKind
 import com.adnanearrassen.ytarchiver.domain.model.Playlist
 import com.adnanearrassen.ytarchiver.domain.repository.LibraryRepository
@@ -24,6 +25,7 @@ enum class LibraryFilter(val label: String) {
     VIDEOS("Videos"),
     MUSIC("Music"),
     PLAYLISTS("Playlists"),
+    CHANNELS("Channels"),
     FAVORITES("Favorites"),
     RECENT("Recent"),
 }
@@ -40,12 +42,19 @@ class LibraryViewModel @Inject constructor(
     private val _query = MutableStateFlow("")
     val query: StateFlow<String> = _query.asStateFlow()
 
+    /** When the Channels filter is active and a channel is opened. */
+    private val _selectedChannel = MutableStateFlow<String?>(null)
+    val selectedChannel: StateFlow<String?> = _selectedChannel.asStateFlow()
+
     val playlists: StateFlow<List<Playlist>> = libraryRepository.observePlaylists()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    val channels: StateFlow<List<Channel>> = libraryRepository.observeChannels()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
     val items: StateFlow<List<ArchivedMedia>> =
-        combine(_filter, _query) { filter, query -> filter to query }
-            .flatMapLatest { (filter, query) ->
+        combine(_filter, _query, _selectedChannel) { filter, query, channel -> Triple(filter, query, channel) }
+            .flatMapLatest { (filter, query, channel) ->
                 if (query.isNotBlank()) libraryRepository.search(query)
                 else when (filter) {
                     // Standalone = excludes playlist members (shown via the Playlists filter).
@@ -55,12 +64,23 @@ class LibraryViewModel @Inject constructor(
                     LibraryFilter.FAVORITES -> libraryRepository.observeFavorites()
                     LibraryFilter.RECENT -> libraryRepository.observeRecentlyAdded(50)
                     LibraryFilter.PLAYLISTS -> flowOf(emptyList())
+                    LibraryFilter.CHANNELS ->
+                        if (channel != null) libraryRepository.observeByChannel(channel) else flowOf(emptyList())
                 }
             }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    fun setFilter(filter: LibraryFilter) { _filter.value = filter }
+    fun setFilter(filter: LibraryFilter) {
+        _filter.value = filter
+        if (filter != LibraryFilter.CHANNELS) _selectedChannel.value = null
+    }
     fun setQuery(query: String) { _query.value = query }
+    fun openChannel(name: String?) { _selectedChannel.value = name }
+
+    fun deleteChannel(name: String) = viewModelScope.launch {
+        libraryRepository.deleteChannel(name)
+        if (_selectedChannel.value == name) _selectedChannel.value = null
+    }
 
     fun toggleFavorite(id: Long) = viewModelScope.launch {
         libraryRepository.toggleFavorite(id)

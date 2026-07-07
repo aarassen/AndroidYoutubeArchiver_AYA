@@ -8,6 +8,7 @@ import com.adnanearrassen.ytarchiver.core.common.ApplicationScope
 import com.adnanearrassen.ytarchiver.data.local.dao.MediaDao
 import com.adnanearrassen.ytarchiver.data.local.dao.PlaylistDao
 import com.adnanearrassen.ytarchiver.domain.repository.DownloadRepository
+import com.adnanearrassen.ytarchiver.domain.repository.LibraryRepository
 import com.adnanearrassen.ytarchiver.domain.repository.MediaAnalyzer
 import com.adnanearrassen.ytarchiver.domain.repository.SettingsRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -16,6 +17,13 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import java.io.File
 import java.net.Inet4Address
 import java.net.NetworkInterface
 import java.util.Collections
@@ -24,12 +32,17 @@ import javax.inject.Singleton
 
 data class WebServerState(
     val running: Boolean = false,
-    val url: String? = null,
-)
+    val httpUrl: String? = null,
+    val httpsUrl: String? = null,
+) {
+    val primaryUrl: String? get() = httpsUrl ?: httpUrl
+}
 
 /**
- * Owns the lifecycle of the embedded [MediaWebServer] and the foreground service
- * that keeps it alive in the background.
+ * Owns the embedded [MediaWebServer] instances (plain HTTP and/or HTTPS) and the
+ * foreground service that keeps them alive. HTTPS uses a persisted self-signed
+ * certificate; a password (basic auth) and an "HTTPS only" toggle come from
+ * settings and are re-applied live.
  */
 @Singleton
 class WebServerManager @Inject constructor(
@@ -37,48 +50,91 @@ class WebServerManager @Inject constructor(
     private val mediaDao: MediaDao,
     private val playlistDao: PlaylistDao,
     private val downloadRepository: DownloadRepository,
+    private val libraryRepository: LibraryRepository,
     private val analyzer: MediaAnalyzer,
     private val settingsRepository: SettingsRepository,
     @ApplicationScope private val appScope: CoroutineScope,
 ) {
-    private var server: MediaWebServer? = null
+    private var httpServer: MediaWebServer? = null
+    private var httpsServer: MediaWebServer? = null
+
     private val _state = MutableStateFlow(WebServerState())
     val state: StateFlow<WebServerState> = _state.asStateFlow()
 
-    val port: Int = MediaWebServer.DEFAULT_PORT
+    init {
+        // Re-apply the server when HTTPS-related settings change while running.
+        appScope.launch {
+            settingsRepository.settings
+                .map { it.webServerHttpsEnabled to it.webServerHttpsOnly }
+                .distinctUntilChanged()
+                .drop(1)
+                .collect { if (_state.value.running) restart() }
+        }
+    }
+
+    private fun newServer(port: Int) = MediaWebServer(
+        port = port,
+        context = context,
+        mediaDao = mediaDao,
+        playlistDao = playlistDao,
+        downloadRepository = downloadRepository,
+        libraryRepository = libraryRepository,
+        analyzer = analyzer,
+        settingsRepository = settingsRepository,
+        appScope = appScope,
+    )
 
     @Synchronized
     fun start() {
-        if (server != null) return
-        val s = MediaWebServer(
-            port = port,
-            context = context,
-            mediaDao = mediaDao,
-            playlistDao = playlistDao,
-            downloadRepository = downloadRepository,
-            analyzer = analyzer,
-            settingsRepository = settingsRepository,
-            appScope = appScope,
-        )
-        val started = runCatching { s.start(NanoHTTPD.SOCKET_READ_TIMEOUT, false) }
-        if (started.isFailure) {
-            Log.e(TAG, "Failed to start web server", started.exceptionOrNull())
-            runCatching { s.stop() }
+        if (httpServer != null || httpsServer != null) return
+        val settings = runBlocking { settingsRepository.settings.first() }
+        val ip = localIpAddress()
+        var httpUrl: String? = null
+        var httpsUrl: String? = null
+
+        if (settings.webServerHttpsEnabled) {
+            val ssl = runCatching {
+                SelfSignedTls.serverSocketFactory(File(context.filesDir, "web_keystore.p12"))
+            }.onFailure { Log.e(TAG, "TLS setup failed", it) }.getOrNull()
+            if (ssl != null) {
+                val s = newServer(HTTPS_PORT)
+                s.makeSecure(ssl, null)
+                if (runCatching { s.start(NanoHTTPD.SOCKET_READ_TIMEOUT, false) }.isSuccess) {
+                    httpsServer = s
+                    httpsUrl = "https://$ip:$HTTPS_PORT"
+                }
+            }
+        }
+
+        val startHttp = !settings.webServerHttpsEnabled || !settings.webServerHttpsOnly
+        if (startHttp) {
+            val s = newServer(HTTP_PORT)
+            if (runCatching { s.start(NanoHTTPD.SOCKET_READ_TIMEOUT, false) }.isSuccess) {
+                httpServer = s
+                httpUrl = "http://$ip:$HTTP_PORT"
+            }
+        }
+
+        if (httpServer == null && httpsServer == null) {
+            Log.e(TAG, "Failed to start any web server")
             return
         }
-        server = s
-        _state.value = WebServerState(running = true, url = "http://${localIpAddress()}:$port")
-        Log.i(TAG, "Web server started at ${_state.value.url}")
+        _state.value = WebServerState(running = true, httpUrl = httpUrl, httpsUrl = httpsUrl)
+        Log.i(TAG, "Web server started http=$httpUrl https=$httpsUrl")
         ContextCompat.startForegroundService(context, Intent(context, WebServerService::class.java))
     }
 
     @Synchronized
     fun stop() {
-        server?.stop()
-        server = null
-        _state.value = WebServerState(running = false, url = null)
+        httpServer?.stop(); httpServer = null
+        httpsServer?.stop(); httpsServer = null
+        _state.value = WebServerState()
         context.stopService(Intent(context, WebServerService::class.java))
         Log.i(TAG, "Web server stopped")
+    }
+
+    private fun restart() {
+        stop(); start()
     }
 
     fun toggle() {
@@ -99,5 +155,7 @@ class WebServerManager @Inject constructor(
 
     companion object {
         private const val TAG = "WebServerManager"
+        const val HTTP_PORT = 8080
+        const val HTTPS_PORT = 8443
     }
 }

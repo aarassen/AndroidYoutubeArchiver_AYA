@@ -10,6 +10,7 @@ import com.adnanearrassen.ytarchiver.data.local.entity.PlaylistItemCrossRef
 import com.adnanearrassen.ytarchiver.data.mapper.toDomain
 import com.adnanearrassen.ytarchiver.data.mapper.toHistoryRecord
 import com.adnanearrassen.ytarchiver.domain.model.ArchivedMedia
+import com.adnanearrassen.ytarchiver.domain.model.Channel
 import com.adnanearrassen.ytarchiver.domain.model.ContinueItem
 import com.adnanearrassen.ytarchiver.domain.model.DownloadHistoryRecord
 import com.adnanearrassen.ytarchiver.domain.model.MediaKind
@@ -52,6 +53,19 @@ class LibraryRepositoryImpl @Inject constructor(
 
     override fun observeStandaloneByKind(kind: MediaKind): Flow<List<ArchivedMedia>> =
         mediaDao.observeStandaloneByKind(kind).map { it.map { e -> e.toDomain() } }.flowOn(io)
+
+    override fun observeChannels(): Flow<List<Channel>> =
+        mediaDao.observeChannels().map { it.map { c -> Channel(c.uploader, c.count) } }.flowOn(io)
+
+    override fun observeByChannel(name: String): Flow<List<ArchivedMedia>> =
+        mediaDao.observeByChannel(name).map { it.map { e -> e.toDomain() } }.flowOn(io)
+
+    override suspend fun deleteChannel(name: String) = withContext(io) {
+        mediaDao.getByChannelOnce(name).forEach { entity ->
+            deleteResourceGroup(entity.filePath)
+            mediaDao.delete(entity.id)
+        }
+    }
 
     override fun observePlaylist(playlistId: Long): Flow<Playlist?> =
         playlistDao.observePlaylistWithStats(playlistId).map { it?.toDomain() }.flowOn(io)

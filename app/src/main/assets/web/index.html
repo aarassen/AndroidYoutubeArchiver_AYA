@@ -9,15 +9,13 @@
 <body>
 <header>
     <div class="brand"><span class="logo">⬇</span> YT Archiver</div>
-    <nav id="tabs">
-        <button class="tab active" data-tab="library">Library</button>
-        <button class="tab" data-tab="playlists">Playlists</button>
-        <button class="tab" data-tab="download">Download</button>
-    </nav>
 </header>
 
 <main>
-    <section id="library" class="page active">
+    <section id="home" class="page active">
+        <h2 class="shelf-title" id="continue-title" hidden>Continue watching</h2>
+        <div class="row" id="continue-row"></div>
+        <h2 class="shelf-title">Library</h2>
         <div class="grid" id="library-grid"></div>
         <div class="empty" id="library-empty" hidden>No downloads yet.</div>
     </section>
@@ -41,11 +39,20 @@
     </section>
 </main>
 
+<nav id="bottom-nav">
+    <button class="nav active" data-tab="home"><span class="ic">🏠</span><span>Home</span></button>
+    <button class="nav" data-tab="playlists"><span class="ic">☰</span><span>Playlists</span></button>
+    <button class="nav" data-tab="download"><span class="ic">⬇</span><span>Download</span></button>
+</nav>
+
 <div id="overlay" class="overlay hidden">
     <div class="player">
-        <button class="close" onclick="closePlayer()">✕</button>
+        <div class="player-top">
+            <button class="close" onclick="closePlayer()">✕</button>
+            <div id="player-title" class="ptitle"></div>
+        </div>
         <div id="player-media"></div>
-        <div id="player-title" class="player-title"></div>
+        <div id="player-controls" class="pcontrols"></div>
         <div id="player-up-next" class="up-next"></div>
     </div>
 </div>

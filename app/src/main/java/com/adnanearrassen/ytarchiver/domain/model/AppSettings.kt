@@ -52,6 +52,11 @@ data class AppSettings(
     val autoUpdateYtDlp: Boolean = true,
     val autoUpdateFfmpeg: Boolean = false,
 
+    // --- Web server ---
+    val webServerPassword: String = "",
+    val webServerHttpsEnabled: Boolean = false,
+    val webServerHttpsOnly: Boolean = false,
+
     // --- Appearance ---
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val themeColor: ThemeColor = ThemeColor.RED,

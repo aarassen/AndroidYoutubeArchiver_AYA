@@ -136,6 +136,10 @@ dependencies {
     // Embedded HTTP server (web UI to browse/play/download over LAN)
     implementation(libs.nanohttpd)
 
+    // TLS: generate a self-signed certificate for HTTPS
+    implementation(libs.bouncycastle.prov)
+    implementation(libs.bouncycastle.pkix)
+
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.android)
     androidTestImplementation(platform(libs.androidx.compose.bom))

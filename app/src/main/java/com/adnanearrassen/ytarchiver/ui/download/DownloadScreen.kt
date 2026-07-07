@@ -19,6 +19,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -38,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.adnanearrassen.ytarchiver.core.common.Formatters
+import com.adnanearrassen.ytarchiver.core.common.UrlUtils
 import com.adnanearrassen.ytarchiver.domain.model.MediaInfo
 import com.adnanearrassen.ytarchiver.ui.components.Thumbnail
 
@@ -123,6 +125,7 @@ fun DownloadScreen(
             }
 
             state.info?.let { info ->
+                val isChannel = UrlUtils.isChannelUrl(state.url)
                 Spacer(Modifier.height(20.dp))
                 MediaInfoCard(info)
                 Spacer(Modifier.height(16.dp))
@@ -131,10 +134,22 @@ fun DownloadScreen(
                     modifier = Modifier.fillMaxWidth().height(52.dp),
                 ) {
                     Text(
-                        if (info.isPlaylist) "Download playlist (${info.playlist?.itemCount ?: 0})"
-                        else "Download",
+                        when {
+                            isChannel -> "Download all videos (${info.playlist?.itemCount ?: 0})"
+                            info.isPlaylist -> "Download playlist (${info.playlist?.itemCount ?: 0})"
+                            else -> "Download"
+                        },
                         fontWeight = FontWeight.SemiBold,
                     )
+                }
+                if (isChannel) {
+                    Spacer(Modifier.height(10.dp))
+                    OutlinedButton(
+                        onClick = { viewModel.downloadChannelPlaylists(); onGoToManager() },
+                        modifier = Modifier.fillMaxWidth().height(52.dp),
+                    ) {
+                        Text("Download all playlists", fontWeight = FontWeight.SemiBold)
+                    }
                 }
             }
         }

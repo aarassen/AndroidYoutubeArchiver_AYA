@@ -2,10 +2,9 @@ package com.adnanearrassen.ytarchiver.ui.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.adnanearrassen.ytarchiver.domain.model.ArchivedMedia
 import com.adnanearrassen.ytarchiver.domain.model.ContinueItem
+import com.adnanearrassen.ytarchiver.domain.model.FeedEntry
 import com.adnanearrassen.ytarchiver.domain.model.MediaKind
-import com.adnanearrassen.ytarchiver.domain.model.Playlist
 import com.adnanearrassen.ytarchiver.domain.repository.LibraryRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -34,11 +33,11 @@ enum class SortOrder(val label: String) {
     NAME("Name (A–Z)"),
     SIZE("Largest first");
 
-    fun sort(items: List<ArchivedMedia>): List<ArchivedMedia> = when (this) {
-        RECENT -> items.sortedByDescending { it.addedAt }
-        OLDEST -> items.sortedBy { it.addedAt }
-        NAME -> items.sortedBy { it.title.lowercase() }
-        SIZE -> items.sortedByDescending { it.fileSizeBytes }
+    fun sort(items: List<FeedEntry>): List<FeedEntry> = when (this) {
+        RECENT -> items.sortedByDescending { it.sortTime }
+        OLDEST -> items.sortedBy { it.sortTime }
+        NAME -> items.sortedBy { it.sortName.lowercase() }
+        SIZE -> items.sortedByDescending { it.sortSize }
     }
 }
 
@@ -59,15 +58,13 @@ class HomeViewModel @Inject constructor(
         libraryRepository.observeContinueItems(12)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    /** Downloaded playlists, shown as their own cards (not scattered videos). */
-    val playlists: StateFlow<List<Playlist>> =
-        libraryRepository.observePlaylists()
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
-
-    /** The main vertical feed — standalone media only (playlist members are
-     *  represented by their playlist card, not listed individually). */
-    val feed: StateFlow<List<ArchivedMedia>> = _chip
-        .flatMapLatest { chip ->
+    /**
+     * The main vertical feed as a single sorted list of videos AND playlists.
+     * "All" mixes both; the sort (newest/oldest/name/size) orders them together
+     * so playlists aren't pinned to the top.
+     */
+    val feed: StateFlow<List<FeedEntry>> = combine(
+        _chip.flatMapLatest { chip ->
             when (chip) {
                 HomeChip.ALL -> libraryRepository.observeStandalone()
                 HomeChip.VIDEOS -> libraryRepository.observeStandaloneByKind(MediaKind.VIDEO)
@@ -75,9 +72,19 @@ class HomeViewModel @Inject constructor(
                 HomeChip.FAVORITES -> libraryRepository.observeFavorites()
                 HomeChip.PLAYLISTS -> flowOf(emptyList())
             }
+        },
+        libraryRepository.observePlaylists(),
+        _chip,
+        _sort,
+    ) { media, playlists, chip, order ->
+        val entries = buildList<FeedEntry> {
+            if (chip != HomeChip.PLAYLISTS) media.forEach { add(FeedEntry.Video(it)) }
+            if (chip == HomeChip.ALL || chip == HomeChip.PLAYLISTS) {
+                playlists.forEach { add(FeedEntry.PlaylistRow(it)) }
+            }
         }
-        .combine(_sort) { items, order -> order.sort(items) }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+        order.sort(entries)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     fun setChip(chip: HomeChip) { _chip.value = chip }
     fun setSort(order: SortOrder) { _sort.value = order }

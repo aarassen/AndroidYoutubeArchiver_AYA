@@ -80,11 +80,10 @@ class DownloadRepositoryImpl @Inject constructor(
         val optionsJson = json.encodeToString(DownloadOptions.serializer(), options)
         val now = System.currentTimeMillis()
 
-        // Create the playlist up front; each completed item is linked back to it
-        // (by the worker) at its original playlist index, so order is preserved.
-        val playlistId = playlistDao.insert(
-            PlaylistEntity(name = playlistName, createdAt = now)
-        )
+        // Reuse an existing playlist with the same name (avoids duplicates on
+        // re-download); otherwise create it. Items are linked by the worker.
+        val playlistId = playlistDao.findByName(playlistName)?.id
+            ?: playlistDao.insert(PlaylistEntity(name = playlistName, createdAt = now))
 
         val ids = entries.mapIndexed { index, entry ->
             val position = dao.maxQueuePosition() + 1

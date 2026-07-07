@@ -38,6 +38,9 @@ interface PlaylistDao {
     @Query("SELECT * FROM playlists WHERE id = :id")
     suspend fun getById(id: Long): PlaylistEntity?
 
+    @Query("SELECT * FROM playlists WHERE name = :name LIMIT 1")
+    suspend fun findByName(name: String): PlaylistEntity?
+
     @Query(
         """SELECT p.id, p.name, p.description,
                   COALESCE(p.thumbnailPath, (

@@ -127,7 +127,10 @@ class DownloadWorker @AssistedInject constructor(
             }
             is OpResult.Error -> {
                 Log.e(TAG, "Download failed for ${entity.sourceUrl}: ${outcome.message}")
-                if (settings.autoRetryFailed && entity.retryCount < settings.maxRetries) {
+                // Permanent failures (private/removed/region/age) can never
+                // succeed on retry — mark failed immediately so the queue moves on.
+                val permanent = isPermanentFailure(outcome.message)
+                if (!permanent && settings.autoRetryFailed && entity.retryCount < settings.maxRetries) {
                     downloadDao.update(
                         entity.copy(
                             status = DownloadStatus.QUEUED,
@@ -164,22 +167,42 @@ class DownloadWorker @AssistedInject constructor(
         // metadata json) with MediaStore so they appear in the file manager.
         val thumbnailPath = saveThumbnailNextTo(filePath, entity.thumbnailUrl)
         storageLocator.registerWithMediaStore(*siblingFiles(filePath).toTypedArray())
-        val mediaId = mediaDao.insert(
-            ArchivedMediaEntity(
-                title = resolvedTitle,
-                uploader = entity.uploader,
-                channelId = null,
-                kind = kind,
-                filePath = filePath,
-                thumbnailPath = thumbnailPath,
-                durationSeconds = durationSeconds,
-                fileSizeBytes = if (sizeBytes > 0) sizeBytes else file.length(),
-                resolutionLabel = resolutionLabel,
-                codec = codec,
-                sourceUrl = entity.sourceUrl,
-                addedAt = now,
+        val fileSize = if (sizeBytes > 0) sizeBytes else file.length()
+        // Dedup: if this source was already downloaded, update that row instead
+        // of adding a duplicate to Home/Library.
+        val existing = mediaDao.findBySourceUrl(entity.sourceUrl)
+        val mediaId = if (existing != null) {
+            mediaDao.update(
+                existing.copy(
+                    title = resolvedTitle,
+                    kind = kind,
+                    filePath = filePath,
+                    thumbnailPath = thumbnailPath ?: existing.thumbnailPath,
+                    durationSeconds = durationSeconds.takeIf { it > 0 } ?: existing.durationSeconds,
+                    fileSizeBytes = fileSize,
+                    resolutionLabel = resolutionLabel ?: existing.resolutionLabel,
+                    codec = codec ?: existing.codec,
+                )
             )
-        )
+            existing.id
+        } else {
+            mediaDao.insert(
+                ArchivedMediaEntity(
+                    title = resolvedTitle,
+                    uploader = entity.uploader,
+                    channelId = null,
+                    kind = kind,
+                    filePath = filePath,
+                    thumbnailPath = thumbnailPath,
+                    durationSeconds = durationSeconds,
+                    fileSizeBytes = fileSize,
+                    resolutionLabel = resolutionLabel,
+                    codec = codec,
+                    sourceUrl = entity.sourceUrl,
+                    addedAt = now,
+                )
+            )
+        }
         // Link into its playlist at the original index so order is preserved.
         entity.playlistId?.let { playlistId ->
             playlistDao.addItem(
@@ -201,6 +224,15 @@ class DownloadWorker @AssistedInject constructor(
                 errorMessage = null,
             )
         )
+    }
+
+    private fun isPermanentFailure(message: String): Boolean {
+        val m = message.lowercase()
+        return listOf(
+            "private", "unavailable", "removed", "deleted", "copyright",
+            "region", "not available in your country", "sign in", "age",
+            "members-only", "members only",
+        ).any { m.contains(it) }
     }
 
     private suspend fun markFailed(entity: DownloadEntity, message: String) {

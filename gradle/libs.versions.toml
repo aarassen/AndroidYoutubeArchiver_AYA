@@ -29,6 +29,7 @@ okhttp = "4.12.0"
 accompanistPermissions = "0.36.0"
 coreSplashscreen = "1.0.1"
 nanohttpd = "2.3.1"
+bouncycastle = "1.78.1"
 chaquopy = "16.1.0"
 
 [libraries]
@@ -99,6 +100,10 @@ accompanist-permissions = { group = "com.google.accompanist", name = "accompanis
 
 # --- Embedded HTTP server ---
 nanohttpd = { group = "org.nanohttpd", name = "nanohttpd", version.ref = "nanohttpd" }
+
+# --- TLS (self-signed cert generation for HTTPS) ---
+bouncycastle-prov = { group = "org.bouncycastle", name = "bcprov-jdk18on", version.ref = "bouncycastle" }
+bouncycastle-pkix = { group = "org.bouncycastle", name = "bcpkix-jdk18on", version.ref = "bouncycastle" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

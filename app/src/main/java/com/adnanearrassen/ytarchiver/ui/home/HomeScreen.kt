@@ -41,6 +41,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.adnanearrassen.ytarchiver.domain.model.ArchivedMedia
 import com.adnanearrassen.ytarchiver.domain.model.ContinueItem
+import com.adnanearrassen.ytarchiver.domain.model.FeedEntry
 import com.adnanearrassen.ytarchiver.domain.model.MediaKind
 import com.adnanearrassen.ytarchiver.domain.model.Playlist
 import com.adnanearrassen.ytarchiver.ui.components.CompactVideoCard
@@ -63,7 +64,6 @@ fun HomeScreen(
 ) {
     val feed by viewModel.feed.collectAsStateWithLifecycle()
     val continueWatching by viewModel.continueWatching.collectAsStateWithLifecycle()
-    val playlists by viewModel.playlists.collectAsStateWithLifecycle()
     val chip by viewModel.chip.collectAsStateWithLifecycle()
     val sortOrder by viewModel.sort.collectAsStateWithLifecycle()
     var pendingDelete by remember { mutableStateOf<ArchivedMedia?>(null) }
@@ -168,14 +168,8 @@ fun HomeScreen(
                 }
             }
 
-            // Playlists appear as full-size cards in the same feed. "All" shows
-            // playlists then standalone media; "Playlists" shows only playlists.
-            val showPlaylists = chip == HomeChip.ALL || chip == HomeChip.PLAYLISTS
-            val showMedia = chip != HomeChip.PLAYLISTS
-            val nothingToShow =
-                (!showPlaylists || playlists.isEmpty()) && (!showMedia || feed.isEmpty())
-
-            if (nothingToShow) {
+            // Unified feed: videos and playlists interleaved and sorted together.
+            if (feed.isEmpty()) {
                 item {
                     Box(Modifier.fillMaxWidth().padding(top = 80.dp), contentAlignment = Alignment.Center) {
                         EmptyState(
@@ -185,33 +179,40 @@ fun HomeScreen(
                     }
                 }
             } else {
-                if (showPlaylists) {
-                    items(playlists, key = { "pl-${it.id}" }) { playlist ->
-                        PlaylistCard(
-                            playlist = playlist,
-                            onClick = { onOpenPlaylist(playlist.id) },
-                            onToggleFavorite = { viewModel.togglePlaylistFavorite(playlist.id) },
-                            onDelete = { pendingDeletePlaylist = playlist },
-                        )
-                    }
-                }
-                if (showMedia) {
-                    items(feed, key = { it.id }) { media ->
-                        if (media.kind == MediaKind.MUSIC) {
-                            MusicRow(
-                                media = media,
-                                onClick = { openMedia(media.id) },
-                                onToggleFavorite = { viewModel.toggleFavorite(media.id) },
-                                onDelete = { pendingDelete = media },
-                            )
-                        } else {
-                            VideoCard(
-                                media = media,
-                                onClick = { openMedia(media.id) },
-                                onToggleFavorite = { viewModel.toggleFavorite(media.id) },
-                                onDelete = { pendingDelete = media },
-                            )
+                items(
+                    feed,
+                    key = { entry ->
+                        when (entry) {
+                            is FeedEntry.Video -> "v-${entry.media.id}"
+                            is FeedEntry.PlaylistRow -> "p-${entry.playlist.id}"
                         }
+                    },
+                ) { entry ->
+                    when (entry) {
+                        is FeedEntry.Video -> {
+                            val media = entry.media
+                            if (media.kind == MediaKind.MUSIC) {
+                                MusicRow(
+                                    media = media,
+                                    onClick = { openMedia(media.id) },
+                                    onToggleFavorite = { viewModel.toggleFavorite(media.id) },
+                                    onDelete = { pendingDelete = media },
+                                )
+                            } else {
+                                VideoCard(
+                                    media = media,
+                                    onClick = { openMedia(media.id) },
+                                    onToggleFavorite = { viewModel.toggleFavorite(media.id) },
+                                    onDelete = { pendingDelete = media },
+                                )
+                            }
+                        }
+                        is FeedEntry.PlaylistRow -> PlaylistCard(
+                            playlist = entry.playlist,
+                            onClick = { onOpenPlaylist(entry.playlist.id) },
+                            onToggleFavorite = { viewModel.togglePlaylistFavorite(entry.playlist.id) },
+                            onDelete = { pendingDeletePlaylist = entry.playlist },
+                        )
                     }
                 }
             }

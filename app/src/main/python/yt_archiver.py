@@ -88,10 +88,30 @@ def analyze(url):
         return json.dumps({"error": _describe_error(e)})
 
 
+_UNAVAILABLE_TITLES = (
+    "[Private video]", "[Deleted video]", "[Unavailable video]",
+    "[Private Video]", "[Deleted Video]",
+)
+
+
+def _is_unavailable_entry(e):
+    """True for private / deleted / members-only / region-blocked entries that
+    can't be downloaded, so we can skip them instead of stalling the queue."""
+    if not (e.get("url") or e.get("id")):
+        return True
+    title = (e.get("title") or "").strip()
+    if title in _UNAVAILABLE_TITLES:
+        return True
+    avail = e.get("availability")
+    if avail in ("private", "needs_auth", "subscriber_only", "premium_only", "unlisted_and_private"):
+        return True
+    return False
+
+
 def _playlist_to_dict(info, url):
     entries = []
     for e in (info.get("entries") or []):
-        if not e:
+        if not e or _is_unavailable_entry(e):
             continue
         entries.append({
             "id": e.get("id") or "",

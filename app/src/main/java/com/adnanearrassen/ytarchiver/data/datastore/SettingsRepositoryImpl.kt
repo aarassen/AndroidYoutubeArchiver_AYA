@@ -80,6 +80,9 @@ class SettingsRepositoryImpl @Inject constructor(
         deleteSourceAfterConversion = this[K.deleteSource] ?: true,
         autoUpdateYtDlp = this[K.autoUpdateYtDlp] ?: true,
         autoUpdateFfmpeg = this[K.autoUpdateFfmpeg] ?: false,
+        webServerPassword = this[K.webServerPassword] ?: "",
+        webServerHttpsEnabled = this[K.webServerHttpsEnabled] ?: false,
+        webServerHttpsOnly = this[K.webServerHttpsOnly] ?: false,
         themeMode = enumOr(this[K.themeMode], ThemeMode.SYSTEM),
         themeColor = enumOr(this[K.themeColor], ThemeColor.RED),
         dynamicColor = this[K.dynamicColor] ?: false,
@@ -122,6 +125,9 @@ class SettingsRepositoryImpl @Inject constructor(
         p[K.deleteSource] = deleteSourceAfterConversion
         p[K.autoUpdateYtDlp] = autoUpdateYtDlp
         p[K.autoUpdateFfmpeg] = autoUpdateFfmpeg
+        p[K.webServerPassword] = webServerPassword
+        p[K.webServerHttpsEnabled] = webServerHttpsEnabled
+        p[K.webServerHttpsOnly] = webServerHttpsOnly
         p[K.themeMode] = themeMode.name
         p[K.themeColor] = themeColor.name
         p[K.dynamicColor] = dynamicColor
@@ -167,6 +173,9 @@ class SettingsRepositoryImpl @Inject constructor(
         val deleteSource = booleanPreferencesKey("delete_source")
         val autoUpdateYtDlp = booleanPreferencesKey("auto_update_ytdlp")
         val autoUpdateFfmpeg = booleanPreferencesKey("auto_update_ffmpeg")
+        val webServerPassword = stringPreferencesKey("web_server_password")
+        val webServerHttpsEnabled = booleanPreferencesKey("web_server_https_enabled")
+        val webServerHttpsOnly = booleanPreferencesKey("web_server_https_only")
         val themeMode = stringPreferencesKey("theme_mode")
         val themeColor = stringPreferencesKey("theme_color")
         val dynamicColor = booleanPreferencesKey("dynamic_color")
