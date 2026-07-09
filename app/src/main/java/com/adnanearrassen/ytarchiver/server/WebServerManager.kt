@@ -34,6 +34,8 @@ data class WebServerState(
     val running: Boolean = false,
     val httpUrl: String? = null,
     val httpsUrl: String? = null,
+    /** Plain-HTTP base URL usable by a Chromecast, even in HTTPS-only mode. */
+    val castBaseUrl: String? = null,
 ) {
     val primaryUrl: String? get() = httpsUrl ?: httpUrl
 }
@@ -58,6 +60,10 @@ class WebServerManager @Inject constructor(
     private var httpServer: MediaWebServer? = null
     private var httpsServer: MediaWebServer? = null
 
+    /** Stable per-process secret appended to cast URLs so a Chromecast can fetch
+     *  media without the Basic-auth password. */
+    private val castToken: String = java.util.UUID.randomUUID().toString().replace("-", "")
+
     private val _state = MutableStateFlow(WebServerState())
     val state: StateFlow<WebServerState> = _state.asStateFlow()
 
@@ -72,7 +78,7 @@ class WebServerManager @Inject constructor(
         }
     }
 
-    private fun newServer(port: Int) = MediaWebServer(
+    private fun newServer(port: Int, castOnly: Boolean = false) = MediaWebServer(
         port = port,
         context = context,
         mediaDao = mediaDao,
@@ -82,6 +88,8 @@ class WebServerManager @Inject constructor(
         analyzer = analyzer,
         settingsRepository = settingsRepository,
         appScope = appScope,
+        castToken = castToken,
+        castOnly = castOnly,
     )
 
     @Synchronized
@@ -91,6 +99,7 @@ class WebServerManager @Inject constructor(
         val ip = localIpAddress()
         var httpUrl: String? = null
         var httpsUrl: String? = null
+        var castBaseUrl: String? = null
 
         if (settings.webServerHttpsEnabled) {
             val ssl = runCatching {
@@ -106,23 +115,37 @@ class WebServerManager @Inject constructor(
             }
         }
 
-        val startHttp = !settings.webServerHttpsEnabled || !settings.webServerHttpsOnly
-        if (startHttp) {
-            val s = newServer(HTTP_PORT)
-            if (runCatching { s.start(NanoHTTPD.SOCKET_READ_TIMEOUT, false) }.isSuccess) {
-                httpServer = s
-                httpUrl = "http://$ip:$HTTP_PORT"
-            }
+        // Always run a plain-HTTP endpoint. When HTTPS-only is on it serves ONLY
+        // tokenized /media & /thumb (so a Chromecast can still stream), while the
+        // browsable UI stays HTTPS-only.
+        val castOnly = settings.webServerHttpsEnabled && settings.webServerHttpsOnly
+        val s = newServer(HTTP_PORT, castOnly = castOnly)
+        if (runCatching { s.start(NanoHTTPD.SOCKET_READ_TIMEOUT, false) }.isSuccess) {
+            httpServer = s
+            castBaseUrl = "http://$ip:$HTTP_PORT"
+            if (!castOnly) httpUrl = castBaseUrl
         }
 
         if (httpServer == null && httpsServer == null) {
             Log.e(TAG, "Failed to start any web server")
             return
         }
-        _state.value = WebServerState(running = true, httpUrl = httpUrl, httpsUrl = httpsUrl)
-        Log.i(TAG, "Web server started http=$httpUrl https=$httpsUrl")
+        _state.value = WebServerState(
+            running = true, httpUrl = httpUrl, httpsUrl = httpsUrl, castBaseUrl = castBaseUrl,
+        )
+        Log.i(TAG, "Web server started http=$httpUrl https=$httpsUrl castBase=$castBaseUrl")
         ContextCompat.startForegroundService(context, Intent(context, WebServerService::class.java))
     }
+
+    /** Ensures the server is running and returns a tokenized cast URL for the
+     *  media file, or null if no HTTP endpoint could be started. */
+    fun castMediaUrl(id: Long): String? {
+        if (state.value.castBaseUrl == null) start()
+        return state.value.castBaseUrl?.let { "$it/media/$id?token=$castToken" }
+    }
+
+    fun castArtUrl(id: Long): String? =
+        state.value.castBaseUrl?.let { "$it/thumb/$id?token=$castToken" }
 
     @Synchronized
     fun stop() {

@@ -30,6 +30,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Brightness6
+import androidx.compose.material.icons.filled.Cast
+import androidx.compose.material.icons.filled.CastConnected
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ClosedCaption
 import androidx.compose.material.icons.filled.ClosedCaptionOff
@@ -87,8 +89,14 @@ fun PlayerScreen(
     val isPlaylist by viewModel.isPlaylist.collectAsStateWithLifecycle()
     val hasNext by viewModel.hasNext.collectAsStateWithLifecycle()
     val hasPrevious by viewModel.hasPrevious.collectAsStateWithLifecycle()
+    val castDeviceName by viewModel.castDeviceName.collectAsStateWithLifecycle()
     var subtitlesEnabled by remember { mutableStateOf(false) }
-    val player = viewModel.player
+    val localPlayer = viewModel.player
+    // The player controls should drive: local ExoPlayer, or the Cast player while
+    // casting to a TV.
+    val player by viewModel.activePlayer.collectAsStateWithLifecycle()
+    var showCastDialog by remember { mutableStateOf(false) }
+    val castRoutes = rememberCastRoutes(active = showCastDialog)
     val context = LocalContext.current
     val activity = remember(context) { context.findActivity() }
     val audioManager = remember { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
@@ -190,7 +198,9 @@ fun PlayerScreen(
         AndroidView(
             factory = { ctx ->
                 PlayerView(ctx).apply {
-                    this.player = player
+                    // The on-screen surface always shows the LOCAL player; while
+                    // casting it's paused and the "Casting…" overlay takes over.
+                    this.player = localPlayer
                     useController = false
                     resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
                 }
@@ -252,6 +262,23 @@ fun PlayerScreen(
                 }
         )
 
+        // While casting, the local surface is blank — show a cast placeholder.
+        castDeviceName?.let { name ->
+            Column(
+                modifier = Modifier.align(Alignment.Center),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Icon(
+                    Icons.Filled.CastConnected,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(64.dp),
+                )
+                Spacer(Modifier.height(12.dp))
+                Text("Casting to $name", color = Color.White, style = MaterialTheme.typography.titleMedium)
+            }
+        }
+
         // Brightness / volume level indicator (centered).
         AnimatedVisibility(
             visible = indicatorVisible && gestureSide != GestureSide.NONE,
@@ -276,6 +303,9 @@ fun PlayerScreen(
                 isPlaying = isPlaying,
                 position = if (scrubbing) scrubPosition.toLong() else position,
                 duration = duration,
+                showCastButton = viewModel.castAvailable,
+                isCasting = castDeviceName != null,
+                onCast = { showCastDialog = true },
                 showSubtitleButton = hasSubtitles,
                 subtitlesEnabled = subtitlesEnabled,
                 onToggleSubtitles = { subtitlesEnabled = !subtitlesEnabled },
@@ -299,6 +329,10 @@ fun PlayerScreen(
             )
         }
     }
+
+    if (showCastDialog) {
+        CastDeviceDialog(state = castRoutes, onDismiss = { showCastDialog = false })
+    }
 }
 
 @Composable
@@ -307,6 +341,9 @@ private fun PlayerControls(
     isPlaying: Boolean,
     position: Long,
     duration: Long,
+    showCastButton: Boolean,
+    isCasting: Boolean,
+    onCast: () -> Unit,
     showSubtitleButton: Boolean,
     subtitlesEnabled: Boolean,
     onToggleSubtitles: () -> Unit,
@@ -347,6 +384,15 @@ private fun PlayerControls(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f).padding(start = 4.dp),
             )
+            if (showCastButton) {
+                IconButton(onClick = onCast) {
+                    Icon(
+                        if (isCasting) Icons.Filled.CastConnected else Icons.Filled.Cast,
+                        contentDescription = "Cast to TV",
+                        tint = Color.White,
+                    )
+                }
+            }
             if (showSubtitleButton) {
                 IconButton(onClick = onToggleSubtitles) {
                     Icon(

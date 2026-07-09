@@ -5,6 +5,8 @@
     <!-- Networking -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- Cast (Chromecast) device discovery on the local network -->
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
 
     <!-- Notifications (Android 13+) for download & playback -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
@@ -87,6 +89,11 @@
             android:name="androidx.work.impl.foreground.SystemForegroundService"
             android:foregroundServiceType="dataSync"
             tools:node="merge" />
+
+        <!-- Google Cast options provider (Chromecast support) -->
+        <meta-data
+            android:name="com.google.android.gms.cast.framework.OPTIONS_PROVIDER_CLASS_NAME"
+            android:value="com.adnanearrassen.ytarchiver.cast.CastOptionsProvider" />
 
         <!-- WorkManager is initialized on-demand via Hilt (see YtArchiverApp) -->
         <provider

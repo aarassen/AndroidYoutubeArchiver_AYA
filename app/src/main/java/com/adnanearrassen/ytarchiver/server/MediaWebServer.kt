@@ -45,12 +45,23 @@ class MediaWebServer(
     private val analyzer: MediaAnalyzer,
     private val settingsRepository: SettingsRepository,
     @ApplicationScope private val appScope: CoroutineScope,
+    /** Shared secret that lets a Chromecast fetch /media & /thumb without the
+     *  Basic-auth password (which a Cast device can't send). */
+    private val castToken: String,
+    /** When true this instance ONLY serves tokenized /media & /thumb — used for
+     *  the plain-HTTP endpoint while the web UI is forced to HTTPS-only. */
+    private val castOnly: Boolean = false,
 ) : NanoHTTPD(port) {
 
     override fun serve(session: IHTTPSession): Response {
         return try {
-            if (!isAuthorized(session)) return unauthorized()
             val uri = session.uri
+            val castRequest = isCastMediaRequest(uri) && hasValidCastToken(session)
+            // Cast-only endpoint: reject everything that isn't a tokenized fetch.
+            if (castOnly && !castRequest) {
+                return newFixedLengthResponse(Response.Status.FORBIDDEN, "text/plain", "HTTPS only")
+            }
+            if (!castRequest && !isAuthorized(session)) return unauthorized()
             when {
                 uri == "/" || uri == "/index.html" -> asset("web/index.html", "text/html")
                 uri == "/app.js" -> asset("web/app.js", "application/javascript")
@@ -72,6 +83,14 @@ class MediaWebServer(
     }
 
     // --- Auth --------------------------------------------------------------
+
+    private fun isCastMediaRequest(uri: String): Boolean =
+        uri.startsWith("/media/") || uri.startsWith("/thumb/")
+
+    private fun hasValidCastToken(session: IHTTPSession): Boolean {
+        val token = session.parameters["token"]?.firstOrNull() ?: return false
+        return token.isNotEmpty() && token == castToken
+    }
 
     private fun isAuthorized(session: IHTTPSession): Boolean {
         val password = runBlocking { settingsRepository.settings.first().webServerPassword }
