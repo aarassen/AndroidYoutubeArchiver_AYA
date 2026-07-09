@@ -23,6 +23,34 @@ import traceback
 # stream selections that don't require it.
 _FFMPEG_LOCATION = None
 
+# Optional path to a Netscape-format cookies.txt (set via set_cookies()). When
+# present it is passed to yt-dlp as `cookiefile`, unlocking age-restricted,
+# members-only and private videos the signed-in user can access.
+_COOKIES_FILE = None
+
+# When True, a download that fails with an age/sign-in/format error is retried
+# against alternate YouTube player clients (different "device APIs"), which can
+# bypass many restrictions without cookies. See set_bypass_enabled().
+_BYPASS_ENABLED = False
+
+# Ordered alternate player clients to try. Historically `tv_embedded` and the
+# mobile clients slip past age-gates the default web client cannot.
+_BYPASS_CLIENTS = ["android", "ios", "tv_embedded", "mweb", "web_safari", "tv"]
+
+# Errors worth retrying with a different client (auth / age / format issues).
+# A genuinely private or deleted video won't be helped, so we don't cycle those.
+_BYPASSABLE_MARKERS = (
+    "sign in", "age", "confirm your age", "login", "log in",
+    "not available", "unable to extract", "requested format",
+    "no video formats", "nsig", "player", "members-only", "members only",
+    "join this channel",
+)
+
+
+def _should_try_alt_client(e):
+    low = str(e).lower()
+    return any(m in low for m in _BYPASSABLE_MARKERS)
+
 
 def _has_ffmpeg():
     if _FFMPEG_LOCATION and os.path.exists(_FFMPEG_LOCATION):
@@ -34,6 +62,27 @@ def set_ffmpeg_location(path):
     """Kotlin can point us at a bundled ffmpeg binary/dir once one is shipped."""
     global _FFMPEG_LOCATION
     _FFMPEG_LOCATION = path
+
+
+def set_cookies(path):
+    """Kotlin sets/clears the cookies.txt file used for authenticated requests.
+    Pass an empty string / None to disable."""
+    global _COOKIES_FILE
+    _COOKIES_FILE = path if (path and os.path.exists(path)) else None
+
+
+def set_bypass_enabled(flag):
+    """Enable/disable retrying restricted downloads against alternate player
+    clients (different device APIs)."""
+    global _BYPASS_ENABLED
+    _BYPASS_ENABLED = bool(flag)
+
+
+def _apply_cookies(opts):
+    """Add the cookies file to a yt-dlp options dict, if one is configured."""
+    if _COOKIES_FILE:
+        opts["cookiefile"] = _COOKIES_FILE
+    return opts
 
 
 # ---------------------------------------------------------------------------
@@ -78,6 +127,7 @@ def analyze(url):
             # Flatten playlists so we don't resolve every entry (fast).
             "extract_flat": "in_playlist",
         }
+        _apply_cookies(opts)
         with yt_dlp.YoutubeDL(opts) as ydl:
             info = ydl.extract_info(url, download=False)
 
@@ -248,23 +298,47 @@ def download(url, options_json, out_dir, callback):
             except Exception:
                 traceback.print_exc()
 
-        ydl_opts = _build_ydl_opts(opts, outtmpl)
-        ydl_opts["progress_hooks"] = [hook]
+        base_opts = _build_ydl_opts(opts, outtmpl)
+        base_opts["progress_hooks"] = [hook]
 
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=True)
-            final_path = ydl.prepare_filename(info)
-            # Postprocessors may change the extension (e.g. mp3 extraction).
-            final_path = _resolve_final_path(final_path, opts)
+        # Attempt with the default client first; if it fails with an age/login/
+        # format error and bypass is enabled, retry against alternate player
+        # clients (different device APIs). `None` = yt-dlp's default selection.
+        attempts = [None]
+        if _BYPASS_ENABLED:
+            attempts += _BYPASS_CLIENTS
 
-        size = os.path.getsize(final_path) if os.path.exists(final_path) else 0
+        last_error = None
+        for client in attempts:
+            ydl_opts = dict(base_opts)
+            if client:
+                ydl_opts["extractor_args"] = {"youtube": {"player_client": [client]}}
+            try:
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    info = ydl.extract_info(url, download=True)
+                    final_path = ydl.prepare_filename(info)
+                    # Postprocessors may change the extension (e.g. mp3 extraction).
+                    final_path = _resolve_final_path(final_path, opts)
+
+                size = os.path.getsize(final_path) if os.path.exists(final_path) else 0
+                return json.dumps({
+                    "filePath": final_path,
+                    "fileSizeBytes": size,
+                    "title": info.get("title"),
+                    "uploader": info.get("uploader") or info.get("channel"),
+                    "durationSeconds": _as_long(info.get("duration")) or 0,
+                    "id": info.get("id"),
+                })
+            except Exception as e:
+                last_error = e
+                # Stop early if the failure isn't the kind an alternate client
+                # can fix (e.g. genuinely private/deleted, or network is down).
+                if not (_BYPASS_ENABLED and _should_try_alt_client(e)):
+                    break
+
         return json.dumps({
-            "filePath": final_path,
-            "fileSizeBytes": size,
-            "title": info.get("title"),
-            "uploader": info.get("uploader") or info.get("channel"),
-            "durationSeconds": _as_long(info.get("duration")) or 0,
-            "id": info.get("id"),
+            "error": _describe_error(last_error),
+            "unavailable": _is_permanent_error(last_error),
         })
     except Exception as e:
         return json.dumps({"error": _describe_error(e), "unavailable": _is_permanent_error(e)})
@@ -285,6 +359,7 @@ def _build_ydl_opts(opts, outtmpl):
     }
     if _FFMPEG_LOCATION:
         common["ffmpeg_location"] = _FFMPEG_LOCATION
+    _apply_cookies(common)
 
     # Save a full metadata sidecar (<title>.info.json) next to the media as a
     # resource, so the structured folder keeps everything about the download.

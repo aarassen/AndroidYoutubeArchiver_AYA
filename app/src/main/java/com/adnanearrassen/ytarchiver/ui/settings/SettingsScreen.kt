@@ -1,8 +1,12 @@
 package com.adnanearrassen.ytarchiver.ui.settings
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -12,15 +16,21 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -48,9 +58,24 @@ fun SettingsScreen(
 ) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val webServer by viewModel.webServerState.collectAsStateWithLifecycle()
+    val message by viewModel.message.collectAsStateWithLifecycle()
+    val snackbarHost = remember { SnackbarHostState() }
+
+    // File picker for a Netscape-format cookies.txt.
+    val cookiesPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri -> if (uri != null) viewModel.importCookies(uri) }
+
+    LaunchedEffect(message) {
+        message?.let {
+            snackbarHost.showSnackbar(it)
+            viewModel.consumeMessage()
+        }
+    }
 
     Scaffold(
         topBar = { TopAppBar(title = { Text("Settings", fontWeight = FontWeight.Bold) }) },
+        snackbarHost = { SnackbarHost(snackbarHost) },
     ) { padding ->
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(padding),
@@ -193,12 +218,55 @@ fun SettingsScreen(
                 }
             }
 
+            item { SettingsSection("yt-dlp engine") }
+            item {
+                SwitchRow(
+                    title = "Bypass age & login restrictions",
+                    checked = settings.bypassRestrictions,
+                    subtitle = "If a download is blocked (age-restricted / \"sign in to confirm\"), retry using alternate device players (android, iOS, TV)",
+                ) { v -> viewModel.update { it.copy(bypassRestrictions = v) } }
+            }
+            item { Spacer(Modifier.height(8.dp)) }
+            item {
+                CookiesRow(
+                    hasCookies = settings.cookiesPath != null,
+                    onImport = { cookiesPicker.launch(arrayOf("text/plain", "text/*", "application/octet-stream", "*/*")) },
+                    onClear = viewModel::clearCookies,
+                )
+            }
+
             item { SettingsSection("Updates & data") }
             item { SwitchRow("Auto-update yt-dlp engine", settings.autoUpdateYtDlp) { v -> viewModel.update { it.copy(autoUpdateYtDlp = v) } } }
             item { NavRow("yt-dlp engine & updates", onClick = onOpenEngineUpdate) }
             item { NavRow("Download history", onClick = onOpenHistory) }
             item { NavRow("Storage manager", onClick = onOpenStorage) }
             item { Spacer(Modifier.height(32.dp)) }
+        }
+    }
+}
+
+@Composable
+private fun CookiesRow(hasCookies: Boolean, onImport: () -> Unit, onClear: () -> Unit) {
+    Column(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+        Text(
+            "Import a cookies.txt (Netscape format) to download age-restricted, members-only or private videos you can access when signed in. Export one with a browser extension like \"Get cookies.txt\".",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            if (hasCookies) "Status: cookies loaded ✓" else "Status: no cookies",
+            style = MaterialTheme.typography.bodyMedium,
+            color = if (hasCookies) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(8.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilledTonalButton(onClick = onImport) {
+                Text(if (hasCookies) "Replace cookies.txt" else "Import cookies.txt")
+            }
+            if (hasCookies) {
+                OutlinedButton(onClick = onClear) { Text("Remove") }
+            }
         }
     }
 }

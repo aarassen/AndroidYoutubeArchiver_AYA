@@ -48,6 +48,15 @@ data class AppSettings(
     val downloadPath: String? = null,        // null => app default media dir
     val deleteSourceAfterConversion: Boolean = true,
 
+    // --- Engine (yt-dlp) ---
+    /** Local path to an imported cookies.txt (Netscape format) passed to yt-dlp
+     *  as `--cookies`, enabling age-restricted / members-only / private videos.
+     *  null => no cookies. */
+    val cookiesPath: String? = null,
+    /** When a download fails on age/login/format errors, retry against alternate
+     *  YouTube player clients (android/ios/tv_embedded/…) to bypass restrictions. */
+    val bypassRestrictions: Boolean = true,
+
     // --- Updates ---
     val autoUpdateYtDlp: Boolean = true,
     val autoUpdateFfmpeg: Boolean = false,

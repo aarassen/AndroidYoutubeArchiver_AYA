@@ -78,6 +78,8 @@ class SettingsRepositoryImpl @Inject constructor(
         batterySaver = this[K.batterySaver] ?: false,
         downloadPath = this[K.downloadPath],
         deleteSourceAfterConversion = this[K.deleteSource] ?: true,
+        cookiesPath = this[K.cookiesPath],
+        bypassRestrictions = this[K.bypassRestrictions] ?: true,
         autoUpdateYtDlp = this[K.autoUpdateYtDlp] ?: true,
         autoUpdateFfmpeg = this[K.autoUpdateFfmpeg] ?: false,
         webServerPassword = this[K.webServerPassword] ?: "",
@@ -123,6 +125,8 @@ class SettingsRepositoryImpl @Inject constructor(
         p[K.batterySaver] = batterySaver
         downloadPath?.let { p[K.downloadPath] = it }
         p[K.deleteSource] = deleteSourceAfterConversion
+        if (cookiesPath != null) p[K.cookiesPath] = cookiesPath else p.remove(K.cookiesPath)
+        p[K.bypassRestrictions] = bypassRestrictions
         p[K.autoUpdateYtDlp] = autoUpdateYtDlp
         p[K.autoUpdateFfmpeg] = autoUpdateFfmpeg
         p[K.webServerPassword] = webServerPassword
@@ -171,6 +175,8 @@ class SettingsRepositoryImpl @Inject constructor(
         val batterySaver = booleanPreferencesKey("battery_saver")
         val downloadPath = stringPreferencesKey("download_path")
         val deleteSource = booleanPreferencesKey("delete_source")
+        val cookiesPath = stringPreferencesKey("cookies_path")
+        val bypassRestrictions = booleanPreferencesKey("bypass_restrictions")
         val autoUpdateYtDlp = booleanPreferencesKey("auto_update_ytdlp")
         val autoUpdateFfmpeg = booleanPreferencesKey("auto_update_ffmpeg")
         val webServerPassword = stringPreferencesKey("web_server_password")

@@ -43,6 +43,16 @@ class PythonRuntime @Inject constructor(
 
     fun archiverModule(): PyObject = python().getModule("yt_archiver")
 
+    /** Sets (or clears with null) the cookies.txt file yt-dlp uses for auth. */
+    fun setCookies(path: String?) {
+        runCatching { archiverModule().callAttr("set_cookies", path ?: "") }
+    }
+
+    /** Toggles retrying restricted downloads against alternate player clients. */
+    fun setBypassEnabled(enabled: Boolean) {
+        runCatching { archiverModule().callAttr("set_bypass_enabled", enabled) }
+    }
+
     /** Version string of the currently-active yt-dlp, or null if unavailable. */
     fun engineVersion(): String? =
         runCatching { archiverModule().callAttr("engine_version")?.toString() }

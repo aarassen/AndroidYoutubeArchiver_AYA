@@ -4,9 +4,11 @@ import com.adnanearrassen.ytarchiver.core.common.IoDispatcher
 import com.adnanearrassen.ytarchiver.domain.model.DownloadOptions
 import com.adnanearrassen.ytarchiver.domain.model.MediaInfo
 import com.adnanearrassen.ytarchiver.domain.model.OpResult
+import com.adnanearrassen.ytarchiver.domain.repository.SettingsRepository
 import com.adnanearrassen.ytarchiver.python.dto.AnalyzeDto
 import com.adnanearrassen.ytarchiver.python.dto.toDomain
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -35,12 +37,22 @@ data class DownloadResultDto(
 @Singleton
 class YtDlpService @Inject constructor(
     private val runtime: PythonRuntime,
+    private val settingsRepository: SettingsRepository,
     private val json: Json,
     @IoDispatcher private val io: CoroutineDispatcher,
 ) {
 
+    /** Push the user's current engine prefs (cookies + client bypass) into the
+     *  Python side before an operation. */
+    private suspend fun applyEngineSettings() {
+        val settings = settingsRepository.settings.first()
+        runtime.setCookies(settings.cookiesPath)
+        runtime.setBypassEnabled(settings.bypassRestrictions)
+    }
+
     suspend fun analyze(url: String): OpResult<MediaInfo> = withContext(io) {
         try {
+            applyEngineSettings()
             val raw = runtime.archiverModule().callAttr("analyze", url).toString()
             val dto = json.decodeFromString(AnalyzeDto.serializer(), raw)
             if (dto.error != null) OpResult.Error(dto.error)
@@ -61,6 +73,7 @@ class YtDlpService @Inject constructor(
         onProgress: (com.adnanearrassen.ytarchiver.domain.model.DownloadProgress) -> Unit,
     ): OpResult<DownloadResultDto> = withContext(io) {
         try {
+            applyEngineSettings()
             val optionsJson = OptionsTranslator.toJsonString(options)
             val callback = ProgressCallback { payload ->
                 runCatching {
