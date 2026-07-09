@@ -47,11 +47,34 @@ class StorageViewModel @Inject constructor(
     private val _breakdown = MutableStateFlow<StorageBreakdown?>(null)
     val breakdown: StateFlow<StorageBreakdown?> = _breakdown.asStateFlow()
 
+    private val _scanning = MutableStateFlow(false)
+    val scanning: StateFlow<Boolean> = _scanning.asStateFlow()
+
+    private val _scanMessage = MutableStateFlow<String?>(null)
+    val scanMessage: StateFlow<String?> = _scanMessage.asStateFlow()
+
     init { refresh() }
 
     fun refresh() = viewModelScope.launch {
         _breakdown.value = libraryRepository.storageBreakdown()
     }
+
+    /** Re-import any media on disk that isn't in the library (post-reinstall). */
+    fun rescan() = viewModelScope.launch {
+        if (_scanning.value) return@launch
+        _scanning.value = true
+        val result = runCatching { libraryRepository.restoreFromStorage() }.getOrNull()
+        _scanning.value = false
+        _scanMessage.value = when {
+            result == null -> "Scan failed"
+            result.isEmpty -> "No new files found"
+            else -> "Imported ${result.importedMedia} items" +
+                if (result.importedPlaylists > 0) " · ${result.importedPlaylists} playlists" else ""
+        }
+        refresh()
+    }
+
+    fun consumeScanMessage() { _scanMessage.value = null }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -61,6 +84,13 @@ fun StorageScreen(
     viewModel: StorageViewModel = hiltViewModel(),
 ) {
     val breakdown by viewModel.breakdown.collectAsStateWithLifecycle()
+    val scanning by viewModel.scanning.collectAsStateWithLifecycle()
+    val scanMessage by viewModel.scanMessage.collectAsStateWithLifecycle()
+    val snackbarHost = androidx.compose.runtime.remember { androidx.compose.material3.SnackbarHostState() }
+
+    androidx.compose.runtime.LaunchedEffect(scanMessage) {
+        scanMessage?.let { snackbarHost.showSnackbar(it); viewModel.consumeScanMessage() }
+    }
 
     Scaffold(
         topBar = {
@@ -71,6 +101,7 @@ fun StorageScreen(
                 },
             )
         },
+        snackbarHost = { androidx.compose.material3.SnackbarHost(snackbarHost) },
     ) { padding ->
         val data = breakdown
         if (data == null) {
@@ -81,6 +112,34 @@ fun StorageScreen(
             modifier = Modifier.fillMaxSize().padding(padding),
             contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
         ) {
+            item {
+                Card {
+                    Column(Modifier.padding(16.dp)) {
+                        Text("Restore library", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            "Downloads live in a public folder that survives uninstall. Rescan to re-import any videos, music and playlists that aren't in your library.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        androidx.compose.material3.FilledTonalButton(
+                            onClick = viewModel::rescan,
+                            enabled = !scanning,
+                        ) {
+                            if (scanning) {
+                                androidx.compose.material3.CircularProgressIndicator(
+                                    strokeWidth = 2.dp,
+                                    modifier = Modifier.height(18.dp),
+                                )
+                            } else {
+                                Text("Rescan storage")
+                            }
+                        }
+                    }
+                }
+                Spacer(Modifier.height(16.dp))
+            }
             item {
                 Card {
                     Column(Modifier.padding(16.dp)) {

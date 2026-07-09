@@ -101,6 +101,12 @@ interface MediaDao {
     @Query("SELECT * FROM archived_media WHERE sourceUrl = :url LIMIT 1")
     suspend fun findBySourceUrl(url: String): ArchivedMediaEntity?
 
+    @Query("SELECT * FROM archived_media WHERE filePath = :path LIMIT 1")
+    suspend fun getByFilePath(path: String): ArchivedMediaEntity?
+
+    @Query("SELECT COUNT(*) FROM archived_media")
+    suspend fun count(): Int
+
     // --- Channels (grouped by uploader) ---
     @Query(
         """SELECT uploader AS uploader, COUNT(*) AS count FROM archived_media

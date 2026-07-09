@@ -16,6 +16,8 @@ import com.adnanearrassen.ytarchiver.domain.model.DownloadHistoryRecord
 import com.adnanearrassen.ytarchiver.domain.model.MediaKind
 import com.adnanearrassen.ytarchiver.domain.model.Playlist
 import com.adnanearrassen.ytarchiver.domain.model.StorageBreakdown
+import com.adnanearrassen.ytarchiver.data.scan.LibraryScanResult
+import com.adnanearrassen.ytarchiver.data.scan.MediaLibraryScanner
 import com.adnanearrassen.ytarchiver.domain.repository.LibraryRepository
 import com.adnanearrassen.ytarchiver.storage.StorageLocator
 import kotlinx.coroutines.CoroutineDispatcher
@@ -35,8 +37,13 @@ class LibraryRepositoryImpl @Inject constructor(
     private val playlistDao: PlaylistDao,
     private val downloadDao: DownloadDao,
     private val storageLocator: StorageLocator,
+    private val scanner: MediaLibraryScanner,
     @IoDispatcher private val io: CoroutineDispatcher,
 ) : LibraryRepository {
+
+    override suspend fun isEmpty(): Boolean = withContext(io) { mediaDao.count() == 0 }
+
+    override suspend fun restoreFromStorage(): LibraryScanResult = scanner.scan()
 
     // NOTE: toDomain() touches the filesystem (File.exists()). These maps MUST
     // run off the main thread — flowOn(io) keeps that disk I/O away from the UI

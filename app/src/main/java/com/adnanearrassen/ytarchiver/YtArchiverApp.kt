@@ -10,6 +10,7 @@ import com.adnanearrassen.ytarchiver.core.common.NotificationChannels
 import com.adnanearrassen.ytarchiver.python.PythonRuntime
 import com.adnanearrassen.ytarchiver.domain.model.AppSettings
 import com.adnanearrassen.ytarchiver.domain.repository.EngineUpdateRepository
+import com.adnanearrassen.ytarchiver.domain.repository.LibraryRepository
 import com.adnanearrassen.ytarchiver.domain.repository.SettingsRepository
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
@@ -34,6 +35,7 @@ class YtArchiverApp : Application(), Configuration.Provider, ImageLoaderFactory 
     @Inject lateinit var pythonRuntime: PythonRuntime
     @Inject lateinit var settingsRepository: SettingsRepository
     @Inject lateinit var engineUpdateRepository: EngineUpdateRepository
+    @Inject lateinit var libraryRepository: LibraryRepository
     @Inject @ApplicationScope lateinit var appScope: CoroutineScope
 
     override val workManagerConfiguration: Configuration
@@ -58,6 +60,15 @@ class YtArchiverApp : Application(), Configuration.Provider, ImageLoaderFactory 
         appScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             pythonRuntime.start()
             maybeAutoUpdateEngine()
+        }
+        // Recover the library from public storage after a reinstall (files there
+        // survive uninstall; the DB does not). Only runs when the index is empty.
+        maybeRestoreLibrary()
+    }
+
+    private fun maybeRestoreLibrary() = appScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+        runCatching {
+            if (libraryRepository.isEmpty()) libraryRepository.restoreFromStorage()
         }
     }
 

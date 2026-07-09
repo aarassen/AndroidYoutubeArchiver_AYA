@@ -103,6 +103,13 @@ interface LibraryRepository {
 
     suspend fun storageBreakdown(): StorageBreakdown
     fun observeHistory(): Flow<List<DownloadHistoryRecord>>
+
+    /** True when the library index holds no media (e.g. right after reinstall). */
+    suspend fun isEmpty(): Boolean
+
+    /** Rebuilds the library index from files on disk (survives uninstall).
+     *  Returns how many media/playlists were newly imported. */
+    suspend fun restoreFromStorage(): com.adnanearrassen.ytarchiver.data.scan.LibraryScanResult
 }
 
 /** User settings, backed by DataStore. */
