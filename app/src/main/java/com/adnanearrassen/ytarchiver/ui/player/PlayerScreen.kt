@@ -3,9 +3,12 @@ package com.adnanearrassen.ytarchiver.ui.player
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
+import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.media.AudioManager
+import android.provider.Settings
 import android.view.WindowManager
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -39,6 +42,7 @@ import androidx.compose.material.icons.filled.Forward10
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Replay10
+import androidx.compose.material.icons.filled.ScreenShare
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material3.Icon
@@ -306,6 +310,7 @@ fun PlayerScreen(
                 showCastButton = viewModel.castAvailable,
                 isCasting = castDeviceName != null,
                 onCast = { showCastDialog = true },
+                onMirrorScreen = { context.openScreenMirrorSettings() },
                 showSubtitleButton = hasSubtitles,
                 subtitlesEnabled = subtitlesEnabled,
                 onToggleSubtitles = { subtitlesEnabled = !subtitlesEnabled },
@@ -344,6 +349,7 @@ private fun PlayerControls(
     showCastButton: Boolean,
     isCasting: Boolean,
     onCast: () -> Unit,
+    onMirrorScreen: () -> Unit,
     showSubtitleButton: Boolean,
     subtitlesEnabled: Boolean,
     onToggleSubtitles: () -> Unit,
@@ -384,6 +390,11 @@ private fun PlayerControls(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f).padding(start = 4.dp),
             )
+            // Mirror the whole screen to a TV via the system picker (Miracast /
+            // Smart View). Complements Chromecast media-casting below.
+            IconButton(onClick = onMirrorScreen) {
+                Icon(Icons.Filled.ScreenShare, contentDescription = "Mirror screen to TV", tint = Color.White)
+            }
             if (showCastButton) {
                 IconButton(onClick = onCast) {
                     Icon(
@@ -501,6 +512,25 @@ private fun LevelIndicator(icon: ImageVector, level: Float) {
         }
         Text("${(level * 100).toInt()}%", color = Color.White, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
     }
+}
+
+/**
+ * Opens the system screen-mirroring / "Cast screen" picker so the user can
+ * mirror the entire display (including this player) to a TV. Android has no API
+ * to start mirroring programmatically, so we deep-link to the system UI and fall
+ * back gracefully across OEM variations.
+ */
+private fun Context.openScreenMirrorSettings() {
+    val candidates = listOf(
+        Intent("android.settings.CAST_SETTINGS"),
+        Intent(Settings.ACTION_WIRELESS_SETTINGS),
+        Intent(Settings.ACTION_SETTINGS),
+    )
+    for (intent in candidates) {
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        if (runCatching { startActivity(intent) }.isSuccess) return
+    }
+    Toast.makeText(this, "Screen mirroring isn't available on this device", Toast.LENGTH_SHORT).show()
 }
 
 /** Unwraps the Activity from a (possibly wrapped) Compose context. */
